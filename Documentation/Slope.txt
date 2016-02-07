@@ -1,0 +1,65 @@
+Left on its own the board will orient to align with the path of greatest slope, that is will try to align with gravity
+
+Skidded turn:
+Primarily ride board with a consistent footing (either fully toe-side or fully heel-side).  Shift weight to turn front of the board towards desired direction, lean opposite velocity.
+
+To maintain control swerve in a S-shaped path
+
+Can be performed while snowplowing to control speed.
+
+Light lean in to the mountain, not much centripetal acceleration
+
+Carved turn:
+
+
+Left thumbstick is used to control body lean, basically camera relative lean that rolls the board
+
+
+Board rotation:
+
+Yaw: right thumbstick, used for large-scale turning
+Pitch: left thumbstick, used for braking, modifying turns, or preparing for jumps
+Roll: left thumbstick, used to maintain balance on the mountain, braking, modifying turns, or preparing for jumps
+
+Left thumbstick: Character forward and right vector relative rotation
+Right thumbstick: Character-up-vector-relative rotation 
+
+Input is analogous to flying a ship in 3D, one 2D input for two degrees of freedom, one 1D input for the third
+
+Goofy-footed: swap right and left thumbsticks.  ;)
+
+
+Mental model:
+One hand controls direction. One hand controls stability.  Both need to be in sync to board well.
+
+Fantastic and eclectic environments, characters, and theming mixed with dynami, challenging, and rewarding gameplay
+
+Beginners should be able to fat-finger and make it down a run, but it won't be pretty.  Consider building boards with "stabilizers" that make the riding experience easier.  Think training wheels.
+
+Similar to Katamari thumbstick motion?
+
+I want to feel skilled when I avoid an obstacle while maintaining my momentum.
+
+There must be a range of success cases, avoid binary outcomes.  The goal of every interaction for the player is to maintain as much momentum as possible so that they complete
+the run as quickly as possible.
+
+
+Acceptable binary questions: 
+did you complete the run?
+
+Unacceptable binary outcome:
+Two players both avoided an obstacle and neither lost any speed
+
+
+Important to avoid the "Forza feeling" of a simulation game.  I don't want to have to practice, practice, practice in order to have any fun.
+However, if I practice, practice, practice I need to feel like a total badass.
+
+
+Goal:
+Make it through the run as quickly as possible.
+
+High level strategy:
+Build up speed whenever possible and avoid losing speed whenever possible.  
+
+Mid-level strategies:
+Avoid segments of the run that look to slow you down, lean to have the maximum speed exiting a turn, do not crash
