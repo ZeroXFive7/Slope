@@ -73,6 +73,8 @@ public class BoardMovement : MonoBehaviour
 
     [SerializeField]
     private bool singleThumbstickInput = true;
+    [SerializeField]
+    private float singleThumbstickDeadZone = 0.5f;
 
     private Vector3 boardVelocity;
     private Vector3 turnCenter;
@@ -109,11 +111,7 @@ public class BoardMovement : MonoBehaviour
 
         if (singleThumbstickInput)
         {
-            if (inputGamepadSpace.magnitude < 0.5f)
-            {
-                inputWorldSpace = Vector3.zero;
-            }
-            else
+            if (inputGamepadSpace.magnitude < singleThumbstickDeadZone)
             {
                 inputGamepadSpace = Vector3.zero;
             }
