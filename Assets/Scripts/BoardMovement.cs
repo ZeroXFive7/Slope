@@ -31,6 +31,8 @@ public class BoardMovement : MonoBehaviour
     [Header("Visual")]
     [SerializeField]
     private Transform mesh = null;
+    [SerializeField]
+    private Transform body = null;
 
     [Header("Turning")]
     [SerializeField]
@@ -47,6 +49,8 @@ public class BoardMovement : MonoBehaviour
     private InputAxis horizontalLeanAxis = InputAxis.HorizontalRight;
     [SerializeField]
     private InputAxis verticalLeanAxis = InputAxis.VerticalRight;
+    [SerializeField]
+    private float minBoardLeanAmount = 0.85f;
     [SerializeField]
     private Camera camera = null;
     [SerializeField]
@@ -103,11 +107,16 @@ public class BoardMovement : MonoBehaviour
             transform.position = new Vector3(transform.position.x, hit.point.y + 0.25f, transform.position.z);
         }
 
-        // 0. Read input.
+        // 1. Read input.
         Vector3 inputGamepadSpace = Vector3.right * ReadInputAxis(horizontalLeanAxis) + Vector3.forward * ReadInputAxis(verticalLeanAxis);
         Vector3 leanForward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized;
         Vector3 leanRight = Vector3.ProjectOnPlane(camera.transform.right, Vector3.up).normalized;
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
+        Vector3 inputBoardSpace = transform.InverseTransformVector(inputWorldSpace);
+
+        Vector3 bodyRotationAxis = Vector3.Cross(Vector3.up, inputWorldSpace);
+        float bodyRotationAngle = leanAngle.Evaluate(inputGamepadSpace.magnitude);
+        body.forward = Quaternion.AngleAxis(bodyRotationAngle, bodyRotationAxis) * Vector3.up;
 
         if (singleThumbstickInput)
         {
@@ -119,23 +128,22 @@ public class BoardMovement : MonoBehaviour
 
         Debug.DrawLine(transform.position, transform.position + inputWorldSpace);
 
-        // 1. Accelerate due to gravity.
+        // 2. Accelerate due to gravity.
         boardVelocity = ApplyGravity(boardVelocity);
 
-        // 2. Apply board rotation and set desired acceleration and velocity direction due to pivot        
+        // 3. Apply board rotation and set desired acceleration and velocity direction due to pivot        
         float pivot = singleThumbstickInput ? inputGamepadSpace.x : ReadInputAxis(pivotAxis);
         ApplyPivot(pivot);
 
-        // 3. Calculate desired acceleration and velocity direction due to lean
-        float lean = Vector3.Dot(inputWorldSpace, BoardRight);
-        ApplyLean(pivot, lean);
+        // 4. Calculate desired acceleration and velocity direction due to lean
+        ApplyLean(pivot, inputBoardSpace.x);
 
-        // 4. Apply friction due to board orientation with surface.
+        // 5. Apply friction due to board orientation with surface.
         float forwardDotVelocity = Mathf.Abs(Vector3.Dot(BoardForward, boardVelocity.normalized));
         float friction = Mathf.Lerp(brakingFriction, 0.0f, forwardDotVelocity);
         boardVelocity = ApplyFriction(boardVelocity, friction);
 
-        // 5. Resolve physics
+        // 6. Resolve physics
         ApplyAcceleration(turnDuration);
     }
 
@@ -154,6 +162,10 @@ public class BoardMovement : MonoBehaviour
     private void ApplyLean(float pivot, float lean)
     {
         float leanMagnitude = Mathf.Abs(lean);
+        if (leanMagnitude < minBoardLeanAmount)
+        {
+            leanMagnitude = 0.0f;
+        }
         turnRadius.Evaluate(leanMagnitude);
         leanAngle.Evaluate(leanMagnitude);
 
