@@ -67,7 +67,7 @@ public class RigidbodyHovering : MonoBehaviour
             thrusters[i].Update();
 
             RaycastHit hit;
-            if (Physics.Raycast(thrusters[i].Transform.position, -SurfaceNormal, out hit, maxRaycastDistance, environmentLayerMask))
+            if (Physics.Raycast(thrusters[i].Transform.position, -thrusters[i].Transform.up, out hit, maxRaycastDistance, environmentLayerMask))
             {
                 Debug.DrawLine(thrusters[i].Transform.position, hit.point, Color.yellow);
 

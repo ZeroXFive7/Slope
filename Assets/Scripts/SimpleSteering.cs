@@ -25,17 +25,33 @@ public class SimpleSteering : MonoBehaviour
     [SerializeField]
     private float turnSpeed = 5.0f;
     [SerializeField]
+    private float centerOfMassHeight = -0.1f;
+    [SerializeField]
     private InputAxis horizontalTranslationAxis = InputAxis.HorizontalLeft;
     [SerializeField]
     private InputAxis verticalTranslationAxis = InputAxis.VerticalLeft;
     [SerializeField]
     private InputAxis turnAxis = InputAxis.HorizontalRight;
 
+    [SerializeField]
+    private InputAxis gasAxis = InputAxis.RightTrigger;
+
     private Vector3 previousPosition;
+
+    public Vector3 Velocity { get; private set; }
+
+    private Vector3 BoardForward
+    {
+        get
+        {
+            return Mathf.Sign(Vector3.Dot(transform.forward, Velocity.normalized)) * transform.forward;
+        }
+    }
 
     private void OnEnable()
     {
         previousPosition = transform.position;
+        Velocity = Vector3.zero;
     }
 
     private void FixedUpdate()
@@ -45,19 +61,34 @@ public class SimpleSteering : MonoBehaviour
         Vector3 leanRight = Vector3.ProjectOnPlane(camera.transform.right, hovering.SurfaceNormal).normalized;
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
 
-        Debug.DrawLine(transform.position, transform.position + inputWorldSpace, Color.white);
+        Vector3 com = rigidbody.transform.InverseTransformVector(inputWorldSpace);
+        com.y = centerOfMassHeight;
+        rigidbody.centerOfMass = com;
+        Debug.DrawLine(transform.position, transform.TransformPoint(com), Color.white);
 
-        Vector3 velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
-        Debug.Log(velocity.magnitude);
+        Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
+        Debug.Log(Velocity.magnitude);
         previousPosition = transform.position;
 
-        Vector3 desiredVelocity = inputWorldSpace * speed;
-        Vector3 acceleration = desiredVelocity - velocity;
-        rigidbody.AddForce(acceleration);
+        float gas = ReadInputAxis(gasAxis);
+        if (gas > 0.0f)
+        {
+            Vector3 desiredVelocty = BoardForward * gas * speed;
+            rigidbody.AddForce((desiredVelocty - Velocity));
+        }
+        else
+        {
+            Vector3 desiredVelocity = BoardForward * Velocity.magnitude;
+            rigidbody.AddForce((desiredVelocity - Velocity));
+        }
+
+        //Vector3 desiredVelocity = inputWorldSpace * speed;
+        //Vector3 acceleration = desiredVelocity - velocity;
+        //rigidbody.AddForce(acceleration);
 
         float turnInput = ReadInputAxis(turnAxis);
-        Vector3 desiredAngularVelocity = hovering.SurfaceNormal * turnInput * turnSpeed;
-        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, hovering.SurfaceNormal);
+        Vector3 desiredAngularVelocity = rigidbody.transform.up * turnInput * turnSpeed;
+        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rigidbody.transform.up);
         Vector3 angularAcceleration = desiredAngularVelocity - currentAngularVelocity;
         rigidbody.AddTorque(angularAcceleration);
     }
