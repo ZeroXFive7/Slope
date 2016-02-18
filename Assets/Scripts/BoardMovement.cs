@@ -28,6 +28,9 @@ public class BoardMovement : MonoBehaviour
         RightTrigger
     }
 
+    [SerializeField]
+    private new Rigidbody rigidbody = null;
+
     [Header("Visual")]
     [SerializeField]
     private Transform mesh = null;
@@ -99,14 +102,8 @@ public class BoardMovement : MonoBehaviour
         }
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position + Vector3.up * 5.0f, -Vector3.up, out hit, float.MaxValue, environmentLayerMask))
-        {
-            transform.position = new Vector3(transform.position.x, hit.point.y + 0.25f, transform.position.z);
-        }
-
         // 1. Read input.
         Vector3 inputGamepadSpace = Vector3.right * ReadInputAxis(horizontalLeanAxis) + Vector3.forward * ReadInputAxis(verticalLeanAxis);
         Vector3 leanForward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized;
@@ -129,7 +126,7 @@ public class BoardMovement : MonoBehaviour
         Debug.DrawLine(transform.position, transform.position + inputWorldSpace);
 
         // 2. Accelerate due to gravity.
-        boardVelocity = ApplyGravity(boardVelocity);
+        ApplyGravity(boardVelocity);
 
         // 3. Apply board rotation and set desired acceleration and velocity direction due to pivot        
         float pivot = singleThumbstickInput ? inputGamepadSpace.x : ReadInputAxis(pivotAxis);
@@ -147,9 +144,10 @@ public class BoardMovement : MonoBehaviour
         ApplyAcceleration(turnDuration);
     }
 
-    private Vector3 ApplyGravity(Vector3 currentVelocity)
+    private void ApplyGravity(Vector3 currentVelocity)
     {
-        return currentVelocity + downhillDirection * downhillAcceleration * Time.deltaTime;
+        rigidbody.AddForce(downhillDirection * downhillAcceleration);
+        //return currentVelocity + downhillDirection * downhillAcceleration * Time.deltaTime;
     }
 
     private void ApplyPivot(float pivotRate)
@@ -191,12 +189,13 @@ public class BoardMovement : MonoBehaviour
     {
         float speed = boardVelocity.magnitude;
         Vector3 targetVelocity = BoardForward * speed;
-        Vector3 acceleration = (targetVelocity - boardVelocity) / timeToTurn;
+        Vector3 acceleration = (targetVelocity - rigidbody.velocity) / timeToTurn;
 
         boardVelocity += acceleration * Time.deltaTime;
         boardVelocity = Vector3.ClampMagnitude(boardVelocity, maxSpeed);
 
-        transform.position += boardVelocity * Time.deltaTime;
+        rigidbody.AddForce((boardVelocity - rigidbody.velocity));
+        //transform.position += boardVelocity * Time.deltaTime;
     }
 
     private Vector3 ApplyFriction(Vector3 currentVelocity, float friction)
