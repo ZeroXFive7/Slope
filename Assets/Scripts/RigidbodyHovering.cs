@@ -41,12 +41,18 @@ public class RigidbodyHovering : MonoBehaviour
     [SerializeField]
     private float dampingDistance = 0.2f;
     [SerializeField]
+    private float maxRaycastDistance = 1.0f;
+    [SerializeField]
     private float hoverSpeed = 10.0f;
     [SerializeField]
     private LayerMask environmentLayerMask;
 
+    public Vector3 SurfaceNormal { get; private set; }
+
     private void OnEnable()
     {
+        SurfaceNormal = Vector3.up;
+
         for (int i = 0; i < thrusters.Length; ++i)
         {
             thrusters[i].Reset();
@@ -55,22 +61,40 @@ public class RigidbodyHovering : MonoBehaviour
 
     private void FixedUpdate()
     {
+        Vector3 newSurfaceNormal = Vector3.zero;
         for (int i = 0; i < thrusters.Length; ++i)
         {
             thrusters[i].Update();
 
             RaycastHit hit;
-            if (Physics.Raycast(thrusters[i].Transform.position, -Vector3.up, out hit, hoverHeight, environmentLayerMask))
+            if (Physics.Raycast(thrusters[i].Transform.position, -SurfaceNormal, out hit, maxRaycastDistance, environmentLayerMask))
             {
-                Vector3 targetPosition = hit.point + Vector3.up * hoverHeight;
+                Debug.DrawLine(thrusters[i].Transform.position, hit.point, Color.yellow);
+
+                Vector3 targetPosition = hit.point + SurfaceNormal * hoverHeight;
                 Vector3 vectorToTarget = targetPosition - thrusters[i].Transform.position;
 
                 float desiredSpeed = hoverSpeed * Mathf.Clamp01(vectorToTarget.magnitude / dampingDistance);
                 Vector3 desiredVelocity = vectorToTarget.normalized * desiredSpeed;
                 Vector3 acceleration = desiredVelocity - thrusters[i].Velocity;
+                acceleration = Vector3.Project(acceleration, hit.normal);
 
                 rigidbody.AddForceAtPosition(acceleration, thrusters[i].Transform.position);
+
+                newSurfaceNormal += hit.normal;
             }
         }
+
+        float magnitude = newSurfaceNormal.magnitude;
+        if (magnitude < 0.001f)
+        {
+            newSurfaceNormal = Vector3.up;
+        }
+        else
+        {
+            newSurfaceNormal /= magnitude;
+        }
+
+        SurfaceNormal = newSurfaceNormal;
     }
 }
