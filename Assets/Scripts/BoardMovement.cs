@@ -241,13 +241,4 @@ public class BoardMovement : MonoBehaviour
         }
         return value;
     }
-
-    private void OnDrawGizmos()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, turnCenter);
-
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawLine(transform.position, transform.position + boardVelocity);
-    }
 }

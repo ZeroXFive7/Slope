@@ -37,11 +37,9 @@ public class RigidbodyHovering : MonoBehaviour
 
     [Header("Tunables")]
     [SerializeField]
-    private float hoverHeight = 0.33f;
+    private PropertyCurve hoverHeight;
     [SerializeField]
     private float dampingDistance = 0.2f;
-    [SerializeField]
-    private float maxRaycastDistance = 1.0f;
     [SerializeField]
     private float hoverSpeed = 10.0f;
     [SerializeField]
@@ -49,8 +47,20 @@ public class RigidbodyHovering : MonoBehaviour
 
     public Vector3 SurfaceNormal { get; private set; }
 
+    public bool IsGrounded { get; private set; }
+
+    public float HoverHeightScalar
+    {
+        set
+        {
+            hoverHeight.Evaluate(Mathf.Clamp01(value));
+        }
+    }
+
     private void OnEnable()
     {
+        hoverHeight.Evaluate(1.0f);
+        IsGrounded = false;
         SurfaceNormal = Vector3.up;
 
         for (int i = 0; i < thrusters.Length; ++i)
@@ -67,7 +77,7 @@ public class RigidbodyHovering : MonoBehaviour
             thrusters[i].Update();
 
             RaycastHit hit;
-            if (Physics.Raycast(thrusters[i].Transform.position, -thrusters[i].Transform.up, out hit, maxRaycastDistance, environmentLayerMask))
+            if (Physics.Raycast(thrusters[i].Transform.position, -thrusters[i].Transform.up, out hit, hoverHeight, environmentLayerMask))
             {
                 Debug.DrawLine(thrusters[i].Transform.position, hit.point, Color.yellow);
 
@@ -88,10 +98,12 @@ public class RigidbodyHovering : MonoBehaviour
         float magnitude = newSurfaceNormal.magnitude;
         if (magnitude < 0.001f)
         {
+            IsGrounded = false;
             newSurfaceNormal = Vector3.up;
         }
         else
         {
+            IsGrounded = true;
             newSurfaceNormal /= magnitude;
         }
 

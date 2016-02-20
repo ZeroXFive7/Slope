@@ -22,7 +22,7 @@ public class ChaseCamera : MonoBehaviour
 
     private Vector3 TransformOffset(Vector3 offset)
     {
-        Vector3 steeringForward = steering.Velocity.magnitude > 0.001f ? steering.Velocity : steering.transform.forward;
+        Vector3 steeringForward = (steering.Velocity.magnitude > 0.001f && !steering.IsWipingOut) ? steering.Velocity : steering.transform.forward;
         steeringForward = Vector3.ProjectOnPlane(steeringForward, Vector3.up).normalized;
 
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
