@@ -3,20 +3,34 @@ using System.Collections;
 
 public class SimpleSteering : MonoBehaviour
 {
-    public enum InputAxis
+    [System.Serializable]
+    public struct BoardTrailColors
     {
-        HorizontalLeft,
-        HorizontalRight,
-        VerticalLeft,
-        VerticalRight,
-        LeftTrigger,
-        RightTrigger
+        public string Name;
+        public Color FrontTrailColor;
+        public Color BackTrailColor;
+    };
+
+    public int PlayerInputId
+    {
+        get
+        {
+            if (playerInput == null)
+            {
+                return -1;
+            }
+            return playerInput.id;
+        }
+        set
+        {
+            playerInput = Rewired.ReInput.players.GetPlayer(value);
+        }
     }
+
+    private Rewired.Player playerInput = null;
 
     [SerializeField]
     private new Rigidbody rigidbody = null;
-    [SerializeField]
-    private new Camera camera = null;
     [SerializeField]
     private RigidbodyHovering hovering = null;
     [SerializeField]
@@ -33,15 +47,6 @@ public class SimpleSteering : MonoBehaviour
     private float turnSpeed = 5.0f;
     [SerializeField]
     private float centerOfMassHeight = -0.1f;
-    [SerializeField]
-    private InputAxis horizontalTranslationAxis = InputAxis.HorizontalLeft;
-    [SerializeField]
-    private InputAxis verticalTranslationAxis = InputAxis.VerticalLeft;
-    [SerializeField]
-    private InputAxis turnAxis = InputAxis.HorizontalRight;
-
-    [SerializeField]
-    private InputAxis gasAxis = InputAxis.RightTrigger;
 
     [SerializeField]
     private float wipeoutAngle = 45.0f;
@@ -55,11 +60,9 @@ public class SimpleSteering : MonoBehaviour
     [SerializeField]
     private float timeToTurn = 1.0f;
     [SerializeField]
-    private float timeToCarve = 0.1f;
+    private PropertyCurve timeToCarve;
 
     [Header("Jumping")]
-    [SerializeField]
-    private InputAxis jumpAxis = InputAxis.LeftTrigger;
     [SerializeField]
     private PropertyCurve jumpHeight;
     [SerializeField]
@@ -77,9 +80,36 @@ public class SimpleSteering : MonoBehaviour
     [SerializeField]
     private float timeToSpin = 1.0f;
 
+    [Header("Flip Over")]
+    [SerializeField]
+    private float flipForce = 3.0f;
+    [SerializeField]
+    private float flipTorque = 3.0f;
+
+    [Header("Trails")]
+    [SerializeField]
+    private Renderer frontTrailRenderer = null;
+    [SerializeField]
+    private Renderer backTrailRenderer = null;
+
     private Vector3 previousPosition;
 
     private bool isJumping = false;
+
+    [HideInInspector]
+    public ChaseCamera Camera = null;
+
+    public BoardTrailColors TrailColors
+    {
+        set
+        {
+            frontTrailRenderer.material.color = value.FrontTrailColor;
+            frontTrailRenderer.material.SetColor("_EmissionColor", value.FrontTrailColor);
+
+            backTrailRenderer.material.color = value.BackTrailColor;
+            backTrailRenderer.material.SetColor("_EmissionColor", value.BackTrailColor);
+        }
+    }
 
     public bool IsWipingOut { get; private set; }
 
@@ -101,12 +131,32 @@ public class SimpleSteering : MonoBehaviour
         }
     }
 
-    private void OnEnable()
+    public void Reset(Transform snapToTransform = null)
     {
         isJumping = false;
         IsWipingOut = false;
+
+        rigidbody.velocity = Vector3.zero;
+        rigidbody.angularVelocity = Vector3.zero;
+
+        if (snapToTransform)
+        {
+            transform.position = snapToTransform.position;
+            transform.rotation = snapToTransform.rotation;
+        }
+
         previousPosition = transform.position;
         Velocity = Vector3.zero;
+
+        if (Camera != null)
+        {
+            Camera.transform.position = transform.position;
+        }
+    }
+
+    private void OnEnable()
+    {
+        Reset();
     }
 
     private void FixedUpdate()
@@ -123,15 +173,27 @@ public class SimpleSteering : MonoBehaviour
             }
         }
 
-        Vector3 inputGamepadSpace = Vector3.right * ReadInputAxis(horizontalTranslationAxis) + Vector3.forward * ReadInputAxis(verticalTranslationAxis);
-        Vector3 leanForward = Vector3.ProjectOnPlane(camera.transform.forward, hovering.SurfaceNormal).normalized;
-        Vector3 leanRight = Vector3.ProjectOnPlane(camera.transform.right, hovering.SurfaceNormal).normalized;
+        if (playerInput.GetButton("Flip Over") && !hovering.IsGrounded && !isJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
+        {
+            FlipOver();
+        }
+
+        Vector3 inputGamepadSpace = Vector3.right * playerInput.GetAxis("Lean Horizontal") + Vector3.forward * playerInput.GetAxis("Lean Vertical");
+        Vector3 leanForward = Vector3.ProjectOnPlane(Camera.transform.forward, hovering.SurfaceNormal).normalized;
+        Vector3 leanRight = Vector3.ProjectOnPlane(Camera.transform.right, hovering.SurfaceNormal).normalized;
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
-        Vector3 inputBoardSpace = transform.InverseTransformVector(inputWorldSpace);
 
-        Vector3 spinAngularVelocity = inputGamepadSpace.x * BoardForward * rollSpeed + inputGamepadSpace.z * BoardRight * pitchSpeed;
-        SetDesiredAngularVelocity(spinAngularVelocity, timeToSpin);
+        Vector3 inputBoardSpace = new Vector3(Vector3.Dot(inputWorldSpace, BoardRight), 0.0f, Vector3.Dot(inputWorldSpace, BoardForward));
+        Debug.DrawLine(transform.position, transform.position + transform.TransformVector(inputBoardSpace), Color.green);
 
+        Vector3 spinAngularVelocity = inputBoardSpace.x * BoardForward * rollSpeed + inputBoardSpace.z * BoardRight * pitchSpeed;
+        SetDesiredAngularVelocity(spinAngularVelocity.normalized, spinAngularVelocity.magnitude, timeToSpin);
+        if (hovering.IsGrounded)
+        {
+            CarvedTurn(Vector3.Dot(inputWorldSpace, BoardRight));
+        }
+
+        // Input world space is vector screen relative.  Just find appropriate axes of rotation and set target to ws input value
         Vector3 bodyRotationAxis = Vector3.Cross(rigidbody.transform.up, inputWorldSpace);
         float bodyRotationAngle = leanAngle.Evaluate(inputGamepadSpace.magnitude);
         //body.forward = Quaternion.AngleAxis(bodyRotationAngle, bodyRotationAxis) * rigidbody.transform.up;
@@ -150,15 +212,15 @@ public class SimpleSteering : MonoBehaviour
         Debug.Log(Velocity.magnitude);
         previousPosition = transform.position;
 
-        float turnInput = ReadInputAxis(turnAxis);
-        Vector3 desiredAngularVelocity = rigidbody.transform.up * turnInput * turnSpeed;
-        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rigidbody.transform.up);
-        rigidbody.AddTorque((desiredAngularVelocity - currentAngularVelocity));
+        float turnInput = playerInput.GetAxis("Turn");
+        //Vector3 desiredAngularVelocity = rigidbody.transform.up * turnInput * turnSpeed * Mathf.Deg2Rad;
+        SetDesiredAngularVelocity(rigidbody.transform.up, turnInput * turnSpeed * Mathf.Deg2Rad, timeToTurn);
+        //Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rigidbody.transform.up);
+        //rigidbody.AddTorque((desiredAngularVelocity - currentAngularVelocity));
 
-        float gas = ReadInputAxis(gasAxis);
-        if (gas > 0.0f && hovering.IsGrounded)
+        if (playerInput.GetButton("Accelerate") && hovering.IsGrounded)
         {
-            SetDesiredLinearVelocity(BoardForward * gas * speed, timeToTurn);
+            SetDesiredLinearVelocity(BoardForward * speed, timeToTurn);
         }
         else
         {
@@ -171,7 +233,7 @@ public class SimpleSteering : MonoBehaviour
 
         Debug.DrawLine(transform.position, transform.position + Velocity);
 
-        if (!isJumping && ReadInputAxis(jumpAxis) > 0.0f)
+        if (!isJumping && playerInput.GetButton("Jump"))
         {
             StartCoroutine(JumpCoroutine());
         }
@@ -183,42 +245,15 @@ public class SimpleSteering : MonoBehaviour
         if (leanMagnitude > 0.0f)
         {
             turnRadius.Evaluate(leanMagnitude);
+            timeToCarve.Evaluate(leanMagnitude);
 
             float turnDirection = lean == 0.0f ? 0.0f : Mathf.Sign(lean);
-            Vector3 turnCenter = transform.position + turnDirection * BoardRight * turnRadius;
+            float angularSpeed = Velocity.magnitude / turnRadius;
+            angularSpeed = angularSpeed * turnDirection;
 
-            float angularSpeed = (180.0f * Velocity.magnitude) / (Mathf.PI * turnRadius) * turnDirection;
-
-            //SetDesiredAngularVelocity(rigidbody.transform.up * angularSpeed, timeToCarve);
-            SetDesiredLinearVelocity(Quaternion.AngleAxis(angularSpeed * Time.deltaTime, rigidbody.transform.up) * Velocity, timeToCarve);
+            SetDesiredAngularVelocity(rigidbody.transform.up, angularSpeed, timeToCarve);
+            SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToCarve);
         }
-    }
-
-    private float ReadInputAxis(InputAxis axis)
-    {
-        float value = 0.0f;
-        switch (axis)
-        {
-            case InputAxis.HorizontalLeft:
-                value = Input.GetAxis("HorizontalLeft");
-                break;
-            case InputAxis.HorizontalRight:
-                value = Input.GetAxis("HorizontalRight");
-                break;
-            case InputAxis.VerticalLeft:
-                value = Input.GetAxis("VerticalLeft");
-                break;
-            case InputAxis.VerticalRight:
-                value = Input.GetAxis("VerticalRight");
-                break;
-            case InputAxis.LeftTrigger:
-                value = Input.GetAxis("LeftTrigger");
-                break;
-            case InputAxis.RightTrigger:
-                value = Input.GetAxis("RightTrigger");
-                break;
-        }
-        return value;
     }
 
     private void SetDesiredLinearVelocity(Vector3 desiredLinearVelocity, float timeToAccelerate)
@@ -226,14 +261,18 @@ public class SimpleSteering : MonoBehaviour
         Vector3 acceleration = (desiredLinearVelocity - Velocity) / timeToAccelerate;
         rigidbody.AddForce(acceleration);
     }
-    private void SetDesiredAngularVelocity(Vector3 desiredAngularVelocity, float timeToAccelerate)
+    private void SetDesiredAngularVelocity(Vector3 rotationAxis, float speed, float timeToAccelerate)
     {
-        Vector3 rotationAxis = desiredAngularVelocity.normalized;
         Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rotationAxis);
-        Vector3 acceleration = (desiredAngularVelocity - currentAngularVelocity) / timeToAccelerate;
+        Vector3 acceleration = (rotationAxis * speed - currentAngularVelocity) / timeToAccelerate;
         rigidbody.AddTorque(acceleration);
     }
 
+    private void FlipOver()
+    {
+        rigidbody.AddForce(Vector3.up * flipForce, ForceMode.Impulse);
+        rigidbody.AddRelativeTorque(Vector3.forward * flipTorque, ForceMode.Impulse);
+    }
     private void Wipeout()
     {
         StartCoroutine(WipeoutCoroutine());
@@ -257,7 +296,7 @@ public class SimpleSteering : MonoBehaviour
 
         float jumpTimer = 0.0f;
         float t = 0.0f;
-        while (ReadInputAxis(jumpAxis) > 0.0f)
+        while (playerInput.GetButton("Jump"))
         {
             yield return new WaitForSeconds(Time.deltaTime);
             jumpTimer += Time.deltaTime;

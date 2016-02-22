@@ -3,9 +3,6 @@
 public class ChaseCamera : MonoBehaviour
 {
     [SerializeField]
-    private SimpleSteering steering = null;
-
-    [SerializeField]
     private Vector3 cameraOffset = new Vector3(0.0f, 1.0f, -2.0f);
     [SerializeField]
     private Vector3 targetOffset = new Vector3(0.0f, 0.0f, 0.0f);
@@ -13,6 +10,25 @@ public class ChaseCamera : MonoBehaviour
     private float smoothTime = 0.5f;
 
     private Vector3 velocity = Vector3.zero;
+
+    [Header("Component References")]
+    [SerializeField]
+    private new Camera camera = null;
+
+    [HideInInspector]
+    public SimpleSteering Steering = null;
+
+    public Rect Viewport
+    {
+        get
+        {
+            return camera.rect;
+        }
+        set
+        {
+            camera.rect = value;
+        }
+    }
 
     private void LateUpdate()
     {
@@ -22,10 +38,10 @@ public class ChaseCamera : MonoBehaviour
 
     private Vector3 TransformOffset(Vector3 offset)
     {
-        Vector3 steeringForward = (steering.Velocity.magnitude > 0.001f && !steering.IsWipingOut) ? steering.Velocity : steering.transform.forward;
+        Vector3 steeringForward = (Steering.Velocity.magnitude > 0.001f && !Steering.IsWipingOut) ? Steering.Velocity : Steering.transform.forward;
         steeringForward = Vector3.ProjectOnPlane(steeringForward, Vector3.up).normalized;
 
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
-        return steering.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
+        return Steering.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
     }
 }
