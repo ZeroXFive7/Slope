@@ -79,7 +79,7 @@ public class PlayerSpawnManager : MonoBehaviour
         newPlayer.TrailColors = GetNextBoardColors();
         newPlayer.Camera = playerCamera;
 
-        playerCamera.Steering = newPlayer;
+        playerCamera.Board = newPlayer.GetComponent<BoardMovement>();
 
         Players.Add(newPlayer);
 

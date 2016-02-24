@@ -16,7 +16,7 @@ public class ChaseCamera : MonoBehaviour
     private new Camera camera = null;
 
     [HideInInspector]
-    public SimpleSteering Steering = null;
+    public BoardMovement Board = null;
 
     public Rect Viewport
     {
@@ -38,10 +38,10 @@ public class ChaseCamera : MonoBehaviour
 
     private Vector3 TransformOffset(Vector3 offset)
     {
-        Vector3 steeringForward = (Steering.Velocity.magnitude > 0.001f && !Steering.IsWipingOut) ? Steering.Velocity : Steering.transform.forward;
+        Vector3 steeringForward = (Board.Velocity.magnitude > 0.001f && !Board.IsWipingOut) ? Board.Velocity : Board.transform.forward;
         steeringForward = Vector3.ProjectOnPlane(steeringForward, Vector3.up).normalized;
 
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
-        return Steering.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
+        return Board.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
     }
 }

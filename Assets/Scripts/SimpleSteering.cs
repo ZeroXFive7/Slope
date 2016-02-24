@@ -30,71 +30,13 @@ public class SimpleSteering : MonoBehaviour
     private Rewired.Player playerInput = null;
 
     [SerializeField]
-    private new Rigidbody rigidbody = null;
-    [SerializeField]
-    private RigidbodyHovering hovering = null;
-    [SerializeField]
-    private Transform body = null;
-
-    [SerializeField]
-    private PropertyCurve turnRadius;
-    [SerializeField]
-    private PropertyCurve leanAngle;
-
-    [SerializeField]
-    private float speed = 10.0f;
-    [SerializeField]
-    private float turnSpeed = 5.0f;
-    [SerializeField]
-    private float centerOfMassHeight = -0.1f;
-
-    [SerializeField]
-    private float wipeoutAngle = 45.0f;
-    [SerializeField]
-    private float wipeoutForce = 10.0f;
-    [SerializeField]
-    private float wipeoutTorque = 10.0f;
-    [SerializeField]
-    private float wipeoutDuration = 2.0f;
-
-    [SerializeField]
-    private float timeToTurn = 1.0f;
-    [SerializeField]
-    private PropertyCurve timeToCarve;
-
-    [Header("Jumping")]
-    [SerializeField]
-    private PropertyCurve jumpHeight;
-    [SerializeField]
-    private float maxJumpDuration = 3.0f;
-    [SerializeField]
-    private PropertyCurve jumpForce;
-    [SerializeField]
-    private float jumpTakeoffDuration = 0.5f;
-
-    [Header("Spinning")]
-    [SerializeField]
-    private float rollSpeed = -2.0f;
-    [SerializeField]
-    private float pitchSpeed = 2.0f;
-    [SerializeField]
-    private float timeToSpin = 1.0f;
-
-    [Header("Flip Over")]
-    [SerializeField]
-    private float flipForce = 3.0f;
-    [SerializeField]
-    private float flipTorque = 3.0f;
+    private BoardMovement movement = null;
 
     [Header("Trails")]
     [SerializeField]
     private Renderer frontTrailRenderer = null;
     [SerializeField]
     private Renderer backTrailRenderer = null;
-
-    private Vector3 previousPosition;
-
-    private bool isJumping = false;
 
     [HideInInspector]
     public ChaseCamera Camera = null;
@@ -111,42 +53,9 @@ public class SimpleSteering : MonoBehaviour
         }
     }
 
-    public bool IsWipingOut { get; private set; }
-
-    public Vector3 Velocity { get; private set; }
-
-    private Vector3 BoardForward
-    {
-        get
-        {
-            return Mathf.Sign(Vector3.Dot(transform.forward, Velocity.normalized)) * transform.forward;
-        }
-    }
-
-    private Vector3 BoardRight
-    {
-        get
-        {
-            return Mathf.Sign(Vector3.Dot(transform.forward, Velocity.normalized)) * transform.right;
-        }
-    }
-
     public void Reset(Transform snapToTransform = null)
     {
-        isJumping = false;
-        IsWipingOut = false;
-
-        rigidbody.velocity = Vector3.zero;
-        rigidbody.angularVelocity = Vector3.zero;
-
-        if (snapToTransform)
-        {
-            transform.position = snapToTransform.position;
-            transform.rotation = snapToTransform.rotation;
-        }
-
-        previousPosition = transform.position;
-        Velocity = Vector3.zero;
+        movement.Reset(snapToTransform);
 
         if (Camera != null)
         {
@@ -161,142 +70,36 @@ public class SimpleSteering : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (IsWipingOut)
+        if (movement.IsWipingOut)
         {
-            if (hovering.IsGrounded)
-            {
-                IsWipingOut = false;
-            }
-            else
-            {
-                return;
-            }
-        }
-
-        if (playerInput.GetButtonDown("Flip Over") && !hovering.IsGrounded && !isJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
-        {
-            FlipOver();
+            return;
         }
 
         Vector3 inputGamepadSpace = Vector3.right * playerInput.GetAxis("Lean Horizontal") + Vector3.forward * playerInput.GetAxis("Lean Vertical");
-        Vector3 leanForward = Vector3.ProjectOnPlane(Camera.transform.forward, rigidbody.transform.up).normalized;
-        Vector3 leanRight = Vector3.ProjectOnPlane(Camera.transform.right, rigidbody.transform.up).normalized;
+        Vector3 leanForward = Vector3.ProjectOnPlane(Camera.transform.forward, movement.transform.up).normalized;
+        Vector3 leanRight = Vector3.ProjectOnPlane(Camera.transform.right, movement.transform.up).normalized;
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
+        Vector3 inputBoardSpace = new Vector3(Vector3.Dot(inputWorldSpace, movement.BoardRight), 0.0f, Vector3.Dot(inputWorldSpace, movement.BoardForward));
 
-        Vector3 inputBoardSpace = new Vector3(Vector3.Dot(inputWorldSpace, BoardRight), 0.0f, Vector3.Dot(inputWorldSpace, BoardForward));
-
-        Vector3 spinAngularVelocity = inputBoardSpace.x * BoardForward * rollSpeed + inputBoardSpace.z * BoardRight * pitchSpeed;
-        SetDesiredAngularVelocity(spinAngularVelocity.normalized, spinAngularVelocity.magnitude, timeToSpin);
-        if (hovering.IsGrounded)
-        {
-            CarvedTurn(Vector3.Dot(inputWorldSpace, BoardRight));
-        }
-
-        // Input world space is vector screen relative.  Just find appropriate axes of rotation and set target to ws input value
-        Vector3 bodyRotationAxis = Vector3.Cross(rigidbody.transform.up, inputWorldSpace);
-        float bodyRotationAngle = leanAngle.Evaluate(inputGamepadSpace.magnitude);
-        //body.forward = Quaternion.AngleAxis(bodyRotationAngle, bodyRotationAxis) * rigidbody.transform.up;
-
-        if (Vector3.Angle(Vector3.up, body.forward) > wipeoutAngle)
-        {
-            //Wipeout();
-        }
-
-        Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
-        previousPosition = transform.position;
+        movement.Lean(inputBoardSpace.x, inputBoardSpace.z);
+        movement.CarvedTurn(inputBoardSpace.x);
 
         float turnInput = playerInput.GetAxis("Turn");
-        SetDesiredAngularVelocity(rigidbody.transform.up, turnInput * turnSpeed * Mathf.Deg2Rad, timeToTurn);
+        movement.SkiddedTurn(turnInput);
 
-        if (playerInput.GetButton("Accelerate") && hovering.IsGrounded)
+        if (playerInput.GetButton("Accelerate"))
         {
-            SetDesiredLinearVelocity(BoardForward * speed, timeToTurn);
-        }
-        else if (hovering.IsGrounded)
-        {
-            SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToTurn);
+            movement.DebugMove();
         }
 
-        if (!isJumping && playerInput.GetButton("Jump"))
+        if (playerInput.GetButton("Jump"))
         {
-            StartCoroutine(JumpCoroutine());
-        }
-    }
-
-    private void CarvedTurn(float lean)
-    {
-        float leanMagnitude = Mathf.Abs(lean);
-        if (leanMagnitude > 0.0f)
-        {
-            turnRadius.Evaluate(leanMagnitude);
-            timeToCarve.Evaluate(leanMagnitude);
-
-            float turnDirection = lean == 0.0f ? 0.0f : Mathf.Sign(lean);
-            float angularSpeed = Velocity.magnitude / turnRadius;
-            angularSpeed = angularSpeed * turnDirection;
-
-            SetDesiredAngularVelocity(rigidbody.transform.up, angularSpeed, timeToCarve);
-            SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToCarve);
-        }
-    }
-
-    private void SetDesiredLinearVelocity(Vector3 desiredLinearVelocity, float timeToAccelerate)
-    {
-        Vector3 acceleration = (desiredLinearVelocity - Velocity) / timeToAccelerate;
-        rigidbody.AddForce(acceleration);
-    }
-    private void SetDesiredAngularVelocity(Vector3 rotationAxis, float speed, float timeToAccelerate)
-    {
-        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rotationAxis);
-        Vector3 acceleration = (rotationAxis * speed - currentAngularVelocity) / timeToAccelerate;
-        rigidbody.AddTorque(acceleration);
-    }
-
-    private void FlipOver()
-    {
-        rigidbody.AddForce(Vector3.up * flipForce, ForceMode.Impulse);
-        rigidbody.AddRelativeTorque(Vector3.forward * flipTorque, ForceMode.Impulse);
-    }
-    private void Wipeout()
-    {
-        StartCoroutine(WipeoutCoroutine());
-    }
-
-    private IEnumerator WipeoutCoroutine()
-    {
-        hovering.enabled = false;
-        Vector3 torque = Vector3.Cross(BoardForward, body.forward) * wipeoutTorque;
-        rigidbody.AddTorque(torque, ForceMode.Impulse);
-        rigidbody.AddForce(body.forward * wipeoutForce, ForceMode.Impulse);
-        IsWipingOut = true;
-
-        yield return new WaitForSeconds(wipeoutDuration);
-        hovering.enabled = true;
-    }
-
-    private IEnumerator JumpCoroutine()
-    {
-        isJumping = true;
-
-        float jumpTimer = 0.0f;
-        float t = 0.0f;
-        while (playerInput.GetButton("Jump"))
-        {
-            yield return new WaitForSeconds(Time.deltaTime);
-            jumpTimer += Time.deltaTime;
-            t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
-            hovering.HoverHeightScalar = jumpHeight.Evaluate(t);
+            movement.Jump();
         }
 
-        hovering.HoverHeightScalar = 1.0f;
-        hovering.enabled = false;
-
-        rigidbody.AddForce(hovering.SurfaceNormal * jumpForce.Evaluate(t), ForceMode.Impulse);
-
-        yield return new WaitForSeconds(jumpTakeoffDuration);
-
-        hovering.enabled = true;
-
-        isJumping = false;
+        if (playerInput.GetButtonDown("Flip Over"))
+        {
+            movement.FlipOver();
+        }
     }
 }

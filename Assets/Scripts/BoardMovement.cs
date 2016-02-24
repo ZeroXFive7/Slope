@@ -1,244 +1,241 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
 
 public class BoardMovement : MonoBehaviour
 {
-    [System.Serializable]
-    public struct Kinematic
-    {
-        public float MaxSpeed;
-        public float Acceleration;
-
-        public static Kinematic Lerp(Kinematic lhs, Kinematic rhs, float t)
-        {
-            return new Kinematic()
-            {
-                MaxSpeed = Mathf.Lerp(lhs.MaxSpeed, rhs.MaxSpeed, t),
-                Acceleration = Mathf.Lerp(lhs.Acceleration, rhs.Acceleration, t)
-            };
-        }
-    }
-
-    public enum InputAxis
-    {
-        HorizontalLeft,
-        HorizontalRight,
-        VerticalLeft,
-        VerticalRight,
-        LeftTrigger,
-        RightTrigger
-    }
-
+    [Header("Component References")]
     [SerializeField]
     private new Rigidbody rigidbody = null;
+    [SerializeField]
+    private RigidbodyHovering hovering = null;
 
-    [Header("Visual")]
+    [Header("Debug Acceleration")]
     [SerializeField]
-    private Transform mesh = null;
+    private float debugMovementSpeed = 12.0f;
     [SerializeField]
-    private Transform body = null;
+    private float timeToDebugMovementSpeed = 1.0f;
 
-    [Header("Turning")]
+    [Header("Skidding")]
     [SerializeField]
-    private InputAxis pivotAxis = InputAxis.HorizontalLeft;
+    private float timeToSkiddedTurn = 1.0f;
     [SerializeField]
-    private PropertyCurve pivotAngularSpeed;
-    //[SerializeField]
-    //private PropertyCurve turnDuration;
+    private float skiddedTurnSpeed = 5.0f;
+
+    [Header("Carving")]
+    [SerializeField]
+    private PropertyCurve timeToCarve;
+    [SerializeField]
+    private PropertyCurve carveRadius;
+
+    [Header("Jumping")]
+    [SerializeField]
+    private PropertyCurve jumpHeight;
+    [SerializeField]
+    private float maxJumpDuration = 3.0f;
+    [SerializeField]
+    private PropertyCurve jumpForce;
+    [SerializeField]
+    private float jumpTakeoffDuration = 0.5f;
 
     [Header("Leaning")]
     [SerializeField]
-    private InputAxis leanAxis = InputAxis.HorizontalRight;
+    private float rollSpeed = -2.0f;
     [SerializeField]
-    private InputAxis horizontalLeanAxis = InputAxis.HorizontalRight;
+    private float pitchSpeed = 2.0f;
     [SerializeField]
-    private InputAxis verticalLeanAxis = InputAxis.VerticalRight;
-    [SerializeField]
-    private float minBoardLeanAmount = 0.85f;
-    [SerializeField]
-    private Camera camera = null;
-    [SerializeField]
-    private PropertyCurve turnRadius;
-    [SerializeField]
-    private PropertyCurve leanAngle;
+    private float timeToLean = 1.0f;
 
+    [Header("Wipeout")]
     [SerializeField]
-    private Vector3 downhillDirection = Vector3.forward;
+    private float wipeoutForce = 10.0f;
     [SerializeField]
-    private float downhillAcceleration = 5.0f;
+    private float wipeoutTorque = 10.0f;
+    [SerializeField]
+    private float wipeoutDuration = 2.0f;
 
+    [Header("Flip Over")]
     [SerializeField]
-    private float maxSpeed = 5.0f;
-
+    private float flipForce = 3.0f;
     [SerializeField]
-    private float brakingFriction = 10.0f;
+    private float flipTorque = 3.0f;
 
-    [SerializeField]
-    private float turnDuration = 0.1f;
+    private Vector3 previousPosition = Vector3.zero;
+    private bool jumpAttemptedThisFrame = false;
 
-    [SerializeField]
-    private LayerMask environmentLayerMask;
+    public bool IsJumping { get; private set; }
 
-    [SerializeField]
-    private bool singleThumbstickInput = true;
-    [SerializeField]
-    private float singleThumbstickDeadZone = 0.5f;
+    public bool IsWipingOut { get; private set; }
 
-    private Vector3 boardVelocity;
-    private Vector3 turnCenter;
+    public Vector3 Velocity { get; private set; }
 
-    private Vector3 BoardForward
+    public Vector3 BoardForward
     {
         get
         {
-            return Mathf.Sign(Vector3.Dot(transform.forward, boardVelocity.normalized)) * transform.forward;
+            return Mathf.Sign(Vector3.Dot(transform.forward, Velocity.normalized)) * transform.forward;
         }
     }
 
-    private Vector3 BoardRight
+    public Vector3 BoardRight
     {
         get
         {
-            return Mathf.Sign(Vector3.Dot(transform.forward, boardVelocity.normalized)) * transform.right;
+            return Mathf.Sign(Vector3.Dot(transform.forward, Velocity.normalized)) * transform.right;
         }
+    }
+
+    private void OnEnable()
+    {
+
     }
 
     private void FixedUpdate()
     {
-        // 1. Read input.
-        Vector3 inputGamepadSpace = Vector3.right * ReadInputAxis(horizontalLeanAxis) + Vector3.forward * ReadInputAxis(verticalLeanAxis);
-        Vector3 leanForward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized;
-        Vector3 leanRight = Vector3.ProjectOnPlane(camera.transform.right, Vector3.up).normalized;
-        Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
-        Vector3 inputBoardSpace = transform.InverseTransformVector(inputWorldSpace);
+        Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
+        previousPosition = transform.position;
+    }
 
-        Vector3 bodyRotationAxis = Vector3.Cross(Vector3.up, inputWorldSpace);
-        float bodyRotationAngle = leanAngle.Evaluate(inputGamepadSpace.magnitude);
-        body.forward = Quaternion.AngleAxis(bodyRotationAngle, bodyRotationAxis) * Vector3.up;
+    public void Reset(Transform snapToTransform = null)
+    {
+        IsJumping = false;
+        IsWipingOut = false;
 
-        if (singleThumbstickInput)
+        jumpAttemptedThisFrame = false;
+
+        rigidbody.velocity = Vector3.zero;
+        rigidbody.angularVelocity = Vector3.zero;
+
+        if (snapToTransform)
         {
-            if (inputGamepadSpace.magnitude < singleThumbstickDeadZone)
-            {
-                inputGamepadSpace = Vector3.zero;
-            }
+            transform.position = snapToTransform.position;
+            transform.rotation = snapToTransform.rotation;
         }
 
-        Debug.DrawLine(transform.position, transform.position + inputWorldSpace);
-
-        // 2. Accelerate due to gravity.
-        ApplyGravity(boardVelocity);
-
-        // 3. Apply board rotation and set desired acceleration and velocity direction due to pivot        
-        float pivot = singleThumbstickInput ? inputGamepadSpace.x : ReadInputAxis(pivotAxis);
-        ApplyPivot(pivot);
-
-        // 4. Calculate desired acceleration and velocity direction due to lean
-        ApplyLean(pivot, inputBoardSpace.x);
-
-        // 5. Apply friction due to board orientation with surface.
-        float forwardDotVelocity = Mathf.Abs(Vector3.Dot(BoardForward, boardVelocity.normalized));
-        float friction = Mathf.Lerp(brakingFriction, 0.0f, forwardDotVelocity);
-        boardVelocity = ApplyFriction(boardVelocity, friction);
-
-        // 6. Resolve physics
-        ApplyAcceleration(turnDuration);
+        previousPosition = transform.position;
+        Velocity = Vector3.zero;
     }
 
-    private void ApplyGravity(Vector3 currentVelocity)
+    public void Jump()
     {
-        rigidbody.AddForce(downhillDirection * downhillAcceleration);
-        //return currentVelocity + downhillDirection * downhillAcceleration * Time.deltaTime;
+        jumpAttemptedThisFrame = true;
+
+        if (!IsJumping)
+        {
+            StartCoroutine(JumpCoroutine());
+        }
     }
 
-    private void ApplyPivot(float pivotRate)
+    public void DebugMove()
     {
-        float pivotMagnitude = Mathf.Abs(pivotRate);
-        float pivotDirection = pivotRate == 0.0f ? 0.0f : Mathf.Sign(pivotRate);
-        transform.rotation *= Quaternion.Euler(0.0f, pivotAngularSpeed.Evaluate(pivotMagnitude) * pivotDirection * Time.deltaTime, 0.0f);
+        if (hovering.IsGrounded)
+        {
+            SetDesiredLinearVelocity(BoardForward * debugMovementSpeed, timeToDebugMovementSpeed);
+        }
     }
 
-    private void ApplyLean(float pivot, float lean)
+    public void Lean(float roll, float pitch)
+    {
+        Vector3 leanAngularVelocity = roll * BoardForward * rollSpeed + pitch * BoardRight * pitchSpeed;
+
+        float speed = leanAngularVelocity.magnitude;
+        if (Mathf.Abs(speed) > float.Epsilon)
+        {
+            leanAngularVelocity /= speed;
+        }
+        SetDesiredAngularVelocity(leanAngularVelocity, speed, timeToLean);
+    }
+
+    public void SkiddedTurn(float turnAmount)
+    {
+        SetDesiredAngularVelocity(rigidbody.transform.up, turnAmount * skiddedTurnSpeed * Mathf.Deg2Rad, timeToSkiddedTurn);
+
+        if (hovering.IsGrounded)
+        {
+            SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToSkiddedTurn);
+        }
+    }
+
+    public void CarvedTurn(float lean)
     {
         float leanMagnitude = Mathf.Abs(lean);
-        if (leanMagnitude < minBoardLeanAmount)
+        if (leanMagnitude > 0.0f && hovering.IsGrounded)
         {
-            leanMagnitude = 0.0f;
-        }
-        turnRadius.Evaluate(leanMagnitude);
-        leanAngle.Evaluate(leanMagnitude);
+            carveRadius.Evaluate(leanMagnitude);
+            timeToCarve.Evaluate(leanMagnitude);
 
-        float turnDirection = lean == 0.0f ? 0.0f : Mathf.Sign(lean);
-        mesh.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, -turnDirection * leanAngle);
-        turnCenter = transform.position + turnDirection * BoardRight * turnRadius;
+            float turnDirection = lean == 0.0f ? 0.0f : Mathf.Sign(lean);
+            float angularSpeed = Velocity.magnitude / carveRadius;
+            angularSpeed = angularSpeed * turnDirection;
 
-        if (leanMagnitude > 0.0f)
-        {
-            // Calculate turn angle by finding arc around turn circle that would be traveled at current speed.
-            // arcLength = 2*pi*r*theta/360
-            // theta = (180*arcLength) / (pi*r)
-            float arcLength = boardVelocity.magnitude * Time.deltaTime;
-            float theta = (180.0f * arcLength) / (Mathf.PI * turnRadius);
-
-            Quaternion rotation = Quaternion.Euler(0.0f, turnDirection * theta, 0.0f);
-            transform.rotation *= rotation;
-            boardVelocity = rotation * boardVelocity;
+            SetDesiredAngularVelocity(rigidbody.transform.up, angularSpeed, timeToCarve);
+            SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToCarve);
         }
     }
 
-    private void ApplyAcceleration(float timeToTurn)
+    public void FlipOver()
     {
-        float speed = boardVelocity.magnitude;
-        Vector3 targetVelocity = BoardForward * speed;
-        Vector3 acceleration = (targetVelocity - rigidbody.velocity) / timeToTurn;
-
-        boardVelocity += acceleration * Time.deltaTime;
-        boardVelocity = Vector3.ClampMagnitude(boardVelocity, maxSpeed);
-
-        rigidbody.AddForce((boardVelocity - rigidbody.velocity));
-        //transform.position += boardVelocity * Time.deltaTime;
+        if (!hovering.IsGrounded && !IsJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
+        {
+            rigidbody.AddForce(Vector3.up * flipForce, ForceMode.Impulse);
+            rigidbody.AddRelativeTorque(Vector3.forward * flipTorque, ForceMode.Impulse);
+        }
     }
 
-    private Vector3 ApplyFriction(Vector3 currentVelocity, float friction)
+    public void Wipeout()
     {
-        if (friction > 0.0f)
-        {
-            float speed = currentVelocity.magnitude;
-            if (speed < friction * Time.deltaTime)
-            {
-                currentVelocity = Vector3.zero;
-            }
-            else
-            {
-                currentVelocity += -currentVelocity / speed * friction * Time.deltaTime;
-            }
-        }
-        return currentVelocity;
+        StartCoroutine(WipeoutCoroutine());
     }
 
-    private float ReadInputAxis(InputAxis axis)
+    private void SetDesiredLinearVelocity(Vector3 desiredLinearVelocity, float timeToAccelerate)
     {
-        float value = 0.0f;
-        switch (axis)
+        Vector3 acceleration = (desiredLinearVelocity - Velocity) / timeToAccelerate;
+        rigidbody.AddForce(acceleration);
+    }
+
+    private void SetDesiredAngularVelocity(Vector3 rotationAxis, float speed, float timeToAccelerate)
+    {
+        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rotationAxis);
+        Vector3 acceleration = (rotationAxis * speed - currentAngularVelocity) / timeToAccelerate;
+        rigidbody.AddTorque(acceleration);
+    }
+
+    private IEnumerator WipeoutCoroutine()
+    {
+        hovering.enabled = false;
+        Vector3 torque = Vector3.Cross(BoardForward, rigidbody.transform.up) * wipeoutTorque;
+        rigidbody.AddTorque(torque, ForceMode.Impulse);
+        rigidbody.AddForce(rigidbody.transform.up * wipeoutForce, ForceMode.Impulse);
+        IsWipingOut = true;
+
+        yield return new WaitForSeconds(wipeoutDuration);
+        hovering.enabled = true;
+    }
+
+    private IEnumerator JumpCoroutine()
+    {
+        IsJumping = true;
+
+        float jumpTimer = 0.0f;
+        float t = 0.0f;
+        while (jumpAttemptedThisFrame)
         {
-            case InputAxis.HorizontalLeft:
-                value = Input.GetAxis("HorizontalLeft");
-                break;
-            case InputAxis.HorizontalRight:
-                value = Input.GetAxis("HorizontalRight");
-                break;
-            case InputAxis.VerticalLeft:
-                value = Input.GetAxis("VerticalLeft");
-                break;
-            case InputAxis.VerticalRight:
-                value = Input.GetAxis("VerticalRight");
-                break;
-            case InputAxis.LeftTrigger:
-                value = Input.GetAxis("LeftTrigger");
-                break;
-            case InputAxis.RightTrigger:
-                value = Input.GetAxis("RightTrigger");
-                break;
+            jumpAttemptedThisFrame = false;
+
+            yield return new WaitForSeconds(Time.deltaTime);
+            jumpTimer += Time.deltaTime;
+            t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
+            hovering.HoverHeightScalar = jumpHeight.Evaluate(t);
         }
-        return value;
+
+        hovering.HoverHeightScalar = 1.0f;
+        hovering.enabled = false;
+
+        rigidbody.AddForce(hovering.SurfaceNormal * jumpForce.Evaluate(t), ForceMode.Impulse);
+
+        yield return new WaitForSeconds(jumpTakeoffDuration);
+
+        hovering.enabled = true;
+
+        IsJumping = false;
     }
 }
