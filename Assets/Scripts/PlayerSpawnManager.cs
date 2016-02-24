@@ -49,17 +49,17 @@ public class PlayerSpawnManager : MonoBehaviour
 
             bool playerInputIsActive = activePlayerInputIds.Contains(id);
 
-            if (Rewired.ReInput.players.Players[i].GetButton("Join Game") && !playerInputIsActive && Players.Count < maxPlayerCount)
+            if (Rewired.ReInput.players.Players[i].GetButtonDown("Join Game") && !playerInputIsActive && Players.Count < maxPlayerCount)
             {
                 activePlayerInputIds.Add(id);
                 SpawnPlayerCharacter(id, "Player" + (Players.Count + 1));
                 UpdateViewports();
             }
-            else if (Rewired.ReInput.players.Players[i].GetButton("Join Game") && playerInputIsActive)
+            else if (Rewired.ReInput.players.Players[i].GetButtonDown("Join Game") && playerInputIsActive)
             {
                 RespawnPlayerCharacter(id);
             }
-            else if (Rewired.ReInput.players.Players[i].GetButton("Quit Game") && playerInputIsActive)
+            else if (Rewired.ReInput.players.Players[i].GetButtonDown("Quit Game") && playerInputIsActive)
             {
                 activePlayerInputIds.Remove(id);
                 DestroyPlayerCharacter(id);
@@ -114,12 +114,15 @@ public class PlayerSpawnManager : MonoBehaviour
 
     private void UpdateViewports()
     {
-        SplitscreenViewport viewports = splitscreenViewports[Players.Count - 1];
-        for (int i = 0; i < viewports.PlayerViewports.Length; ++i)
+        if (Players.Count > 0)
         {
-            if (i < Players.Count)
+            SplitscreenViewport viewports = splitscreenViewports[Players.Count - 1];
+            for (int i = 0; i < viewports.PlayerViewports.Length; ++i)
             {
-                Players[i].Camera.Viewport = viewports.PlayerViewports[i];
+                if (i < Players.Count)
+                {
+                    Players[i].Camera.Viewport = viewports.PlayerViewports[i];
+                }
             }
         }
     }

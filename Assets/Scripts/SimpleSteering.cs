@@ -173,18 +173,17 @@ public class SimpleSteering : MonoBehaviour
             }
         }
 
-        if (playerInput.GetButton("Flip Over") && !hovering.IsGrounded && !isJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
+        if (playerInput.GetButtonDown("Flip Over") && !hovering.IsGrounded && !isJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
         {
             FlipOver();
         }
 
         Vector3 inputGamepadSpace = Vector3.right * playerInput.GetAxis("Lean Horizontal") + Vector3.forward * playerInput.GetAxis("Lean Vertical");
-        Vector3 leanForward = Vector3.ProjectOnPlane(Camera.transform.forward, hovering.SurfaceNormal).normalized;
-        Vector3 leanRight = Vector3.ProjectOnPlane(Camera.transform.right, hovering.SurfaceNormal).normalized;
+        Vector3 leanForward = Vector3.ProjectOnPlane(Camera.transform.forward, rigidbody.transform.up).normalized;
+        Vector3 leanRight = Vector3.ProjectOnPlane(Camera.transform.right, rigidbody.transform.up).normalized;
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
 
         Vector3 inputBoardSpace = new Vector3(Vector3.Dot(inputWorldSpace, BoardRight), 0.0f, Vector3.Dot(inputWorldSpace, BoardForward));
-        Debug.DrawLine(transform.position, transform.position + transform.TransformVector(inputBoardSpace), Color.green);
 
         Vector3 spinAngularVelocity = inputBoardSpace.x * BoardForward * rollSpeed + inputBoardSpace.z * BoardRight * pitchSpeed;
         SetDesiredAngularVelocity(spinAngularVelocity.normalized, spinAngularVelocity.magnitude, timeToSpin);
@@ -203,35 +202,20 @@ public class SimpleSteering : MonoBehaviour
             //Wipeout();
         }
 
-        //Vector3 com = rigidbody.transform.InverseTransformVector(inputWorldSpace);
-        //com.y = centerOfMassHeight;
-        //rigidbody.centerOfMass = com;
-        //Debug.DrawLine(transform.position, transform.TransformPoint(com), Color.white);
-
         Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
-        Debug.Log(Velocity.magnitude);
         previousPosition = transform.position;
 
         float turnInput = playerInput.GetAxis("Turn");
-        //Vector3 desiredAngularVelocity = rigidbody.transform.up * turnInput * turnSpeed * Mathf.Deg2Rad;
         SetDesiredAngularVelocity(rigidbody.transform.up, turnInput * turnSpeed * Mathf.Deg2Rad, timeToTurn);
-        //Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rigidbody.transform.up);
-        //rigidbody.AddTorque((desiredAngularVelocity - currentAngularVelocity));
 
         if (playerInput.GetButton("Accelerate") && hovering.IsGrounded)
         {
             SetDesiredLinearVelocity(BoardForward * speed, timeToTurn);
         }
-        else
+        else if (hovering.IsGrounded)
         {
             SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToTurn);
         }
-
-        //Vector3 desiredVelocity = inputWorldSpace * speed;
-        //Vector3 acceleration = desiredVelocity - velocity;
-        //rigidbody.AddForce(acceleration);
-
-        Debug.DrawLine(transform.position, transform.position + Velocity);
 
         if (!isJumping && playerInput.GetButton("Jump"))
         {
