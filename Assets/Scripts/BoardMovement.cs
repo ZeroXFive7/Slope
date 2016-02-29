@@ -165,18 +165,16 @@ public class BoardMovement : MonoBehaviour
         }
     }
 
-    public void CarvedTurn(float lean)
+    public void CarvedTurn(float turnAmount)
     {
-        float leanMagnitude = Mathf.Abs(lean);
-        if (leanMagnitude > 0.0f && hovering.IsGrounded)
+        float turnMagnitude = Mathf.Abs(turnAmount);
+        if (turnMagnitude > 0.0f && hovering.IsGrounded)
         {
-            carveRadius.Evaluate(leanMagnitude);
-            timeToCarve.Evaluate(leanMagnitude);
+            carveRadius.Evaluate(turnMagnitude);
+            timeToCarve.Evaluate(turnMagnitude);
 
-            float turnDirection = lean == 0.0f ? 0.0f : Mathf.Sign(lean);
-            float angularSpeed = Velocity.magnitude / carveRadius;
-            angularSpeed = angularSpeed * turnDirection;
-
+            float turnDirection = Mathf.Sign(turnAmount);
+            float angularSpeed = (Velocity.magnitude * turnDirection) / carveRadius;
             SetDesiredAngularVelocity(rigidbody.transform.up, angularSpeed, timeToCarve);
             SetDesiredLinearVelocity(BoardForward * Velocity.magnitude, timeToCarve);
         }
