@@ -8,6 +8,8 @@ public class BoardMovement : MonoBehaviour
     private new Rigidbody rigidbody = null;
     [SerializeField]
     private RigidbodyHovering hovering = null;
+    [SerializeField]
+    private BoardTrailRenderers trails = null;
 
     [Header("Debug Acceleration")]
     [SerializeField]
@@ -60,7 +62,7 @@ public class BoardMovement : MonoBehaviour
     private float flipTorque = 3.0f;
 
     private Vector3 previousPosition = Vector3.zero;
-    private bool jumpAttemptedThisFrame = false;
+    private float jumpTimer = 0.0f;
 
     public bool IsJumping { get; private set; }
 
@@ -100,7 +102,7 @@ public class BoardMovement : MonoBehaviour
         IsJumping = false;
         IsWipingOut = false;
 
-        jumpAttemptedThisFrame = false;
+        jumpTimer = 0.0f;
 
         rigidbody.velocity = Vector3.zero;
         rigidbody.angularVelocity = Vector3.zero;
@@ -113,15 +115,22 @@ public class BoardMovement : MonoBehaviour
 
         previousPosition = transform.position;
         Velocity = Vector3.zero;
+
+        trails.Reset();
     }
 
-    public void Jump()
+    public void JumpHold()
     {
-        jumpAttemptedThisFrame = true;
+        jumpTimer += Time.deltaTime;
+        float t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
+        hovering.HoverHeightScalar = jumpHeight.Evaluate(t);
+    }
 
+    public void JumpRelease()
+    {
         if (!IsJumping)
         {
-            StartCoroutine(JumpCoroutine());
+            StartCoroutine(JumpReleaseCoroutine());
         }
     }
 
@@ -135,14 +144,15 @@ public class BoardMovement : MonoBehaviour
 
     public void Lean(float roll, float pitch)
     {
-        Vector3 leanAngularVelocity = roll * BoardForward * rollSpeed + pitch * BoardRight * pitchSpeed;
-
-        float speed = leanAngularVelocity.magnitude;
-        if (Mathf.Abs(speed) > float.Epsilon)
+        if (Mathf.Abs(roll) > Mathf.Epsilon)
         {
-            leanAngularVelocity /= speed;
+            SetDesiredAngularVelocity(BoardForward, roll * rollSpeed, timeToLean);
         }
-        SetDesiredAngularVelocity(leanAngularVelocity, speed, timeToLean);
+
+        if (Mathf.Abs(pitch) > Mathf.Epsilon)
+        {
+            SetDesiredAngularVelocity(BoardRight, pitch * pitchSpeed, timeToLean);
+        }
     }
 
     public void SkiddedTurn(float turnAmount)
@@ -211,31 +221,21 @@ public class BoardMovement : MonoBehaviour
         hovering.enabled = true;
     }
 
-    private IEnumerator JumpCoroutine()
+    private IEnumerator JumpReleaseCoroutine()
     {
         IsJumping = true;
-
-        float jumpTimer = 0.0f;
-        float t = 0.0f;
-        while (jumpAttemptedThisFrame)
-        {
-            jumpAttemptedThisFrame = false;
-
-            yield return new WaitForSeconds(Time.deltaTime);
-            jumpTimer += Time.deltaTime;
-            t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
-            hovering.HoverHeightScalar = jumpHeight.Evaluate(t);
-        }
 
         hovering.HoverHeightScalar = 1.0f;
         hovering.enabled = false;
 
+        float t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
         rigidbody.AddForce(hovering.SurfaceNormal * jumpForce.Evaluate(t), ForceMode.Impulse);
 
         yield return new WaitForSeconds(jumpTakeoffDuration);
 
         hovering.enabled = true;
 
+        jumpTimer = 0.0f;
         IsJumping = false;
     }
 }

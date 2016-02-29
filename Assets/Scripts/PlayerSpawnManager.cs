@@ -19,7 +19,7 @@ public class PlayerSpawnManager : MonoBehaviour
     [SerializeField]
     private Transform[] spawnPoints = null;
     [SerializeField]
-    private SimpleSteering.BoardTrailColors[] characterColors = null;
+    private BoardTrailRenderers.TrailColors[] characterColors = null;
     [SerializeField]
     private SplitscreenViewport[] splitscreenViewports = null;
 
@@ -76,8 +76,8 @@ public class PlayerSpawnManager : MonoBehaviour
         ChaseCamera playerCamera = Instantiate(playerCameraPrefab);
 
         newPlayer.PlayerInputId = playerInputId;
-        newPlayer.TrailColors = GetNextBoardColors();
         newPlayer.Camera = playerCamera;
+        newPlayer.GetComponent<BoardTrailRenderers>().Colors = GetNextBoardColors();
 
         playerCamera.Board = newPlayer.GetComponent<BoardMovement>();
 
@@ -127,9 +127,9 @@ public class PlayerSpawnManager : MonoBehaviour
         }
     }
 
-    private SimpleSteering.BoardTrailColors GetNextBoardColors()
+    private BoardTrailRenderers.TrailColors GetNextBoardColors()
     {
-        SimpleSteering.BoardTrailColors color = characterColors[colorIndex];
+        BoardTrailRenderers.TrailColors color = characterColors[colorIndex];
         colorIndex = (colorIndex + 1) % characterColors.Length;
         return color;
     }

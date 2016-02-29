@@ -10,6 +10,8 @@ public class RigidbodyHovering : MonoBehaviour
         private string name;
         [SerializeField]
         private Transform transform;
+        [SerializeField]
+        private FloatPIDController controller;
 
         private Vector3 previousPosition = Vector3.zero;
 

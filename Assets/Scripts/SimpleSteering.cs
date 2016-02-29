@@ -3,13 +3,13 @@ using System.Collections;
 
 public class SimpleSteering : MonoBehaviour
 {
-    [System.Serializable]
-    public struct BoardTrailColors
+    public enum ControlMode
     {
-        public string Name;
-        public Color FrontTrailColor;
-        public Color BackTrailColor;
-    };
+        SkidAndCarve,
+        TurnAndLean,
+        Warthog,
+        SlalomAndCarve
+    }
 
     public int PlayerInputId
     {
@@ -32,26 +32,8 @@ public class SimpleSteering : MonoBehaviour
     [SerializeField]
     private BoardMovement movement = null;
 
-    [Header("Trails")]
-    [SerializeField]
-    private Renderer frontTrailRenderer = null;
-    [SerializeField]
-    private Renderer backTrailRenderer = null;
-
     [HideInInspector]
     public ChaseCamera Camera = null;
-
-    public BoardTrailColors TrailColors
-    {
-        set
-        {
-            frontTrailRenderer.material.color = value.FrontTrailColor;
-            frontTrailRenderer.material.SetColor("_EmissionColor", value.FrontTrailColor);
-
-            backTrailRenderer.material.color = value.BackTrailColor;
-            backTrailRenderer.material.SetColor("_EmissionColor", value.BackTrailColor);
-        }
-    }
 
     public void Reset(Transform snapToTransform = null)
     {
@@ -81,7 +63,7 @@ public class SimpleSteering : MonoBehaviour
         Vector3 inputWorldSpace = leanRight * inputGamepadSpace.x + leanForward * inputGamepadSpace.z;
         Vector3 inputBoardSpace = new Vector3(Vector3.Dot(inputWorldSpace, movement.BoardRight), 0.0f, Vector3.Dot(inputWorldSpace, movement.BoardForward));
 
-        movement.Lean(inputBoardSpace.x, inputBoardSpace.z);
+        movement.Lean(inputGamepadSpace.x, inputGamepadSpace.z);
         movement.CarvedTurn(inputBoardSpace.x);
 
         float turnInput = playerInput.GetAxis("Turn");
@@ -94,7 +76,12 @@ public class SimpleSteering : MonoBehaviour
 
         if (playerInput.GetButton("Jump"))
         {
-            movement.Jump();
+            movement.JumpHold();
+        }
+
+        if (playerInput.GetButtonUp("Jump"))
+        {
+            movement.JumpRelease();
         }
 
         if (playerInput.GetButtonDown("Flip Over"))
