@@ -8,7 +8,9 @@ public class SimpleSteering : MonoBehaviour
         SkidAndCarve,
         TurnAndLean,
         Warthog,
-        SlalomAndCarve
+        SlalomAndCarve,
+        FrontBack,
+        FrontBackLocal
     }
 
     public int PlayerInputId
@@ -40,7 +42,7 @@ public class SimpleSteering : MonoBehaviour
     [HideInInspector]
     public ChaseCamera Camera = null;
 
-    private ControlMode controlMode = ControlMode.TurnAndLean;
+    private ControlMode controlMode = ControlMode.FrontBack;
 
     public Vector3 TransformToCameraRelativeWorldSpace(Vector3 vectorCameraSpace)
     {
@@ -72,9 +74,9 @@ public class SimpleSteering : MonoBehaviour
         {
             movement.JumpHold();
         }
-        if (playerInput.GetButtonUp("Jump"))
+        else
         {
-            movement.JumpRelease();
+            movement.TryJumpRelease();
         }
 
         if (playerInput.GetButton("Accelerate"))
@@ -94,7 +96,7 @@ public class SimpleSteering : MonoBehaviour
         }
         else if (playerInput.GetButton("Set Controls 2"))
         {
-            controlMode = ControlMode.SlalomAndCarve;
+            controlMode = ControlMode.FrontBack;
         }
         else if (playerInput.GetButton("Set Controls 3"))
         {
@@ -102,7 +104,7 @@ public class SimpleSteering : MonoBehaviour
         }
         else if (playerInput.GetButton("Set Controls 4"))
         {
-            controlMode = ControlMode.Warthog;
+            controlMode = ControlMode.FrontBackLocal;
         }
 
         Vector3 leftStickInputSpace = new Vector3(playerInput.GetAxis("Left Stick Horizontal"), 0.0f, playerInput.GetAxis("Left Stick Vertical"));
@@ -121,6 +123,12 @@ public class SimpleSteering : MonoBehaviour
                 break;
             case ControlMode.Warthog:
                 UpdateWarthog(leftStickInputSpace, rightStickInputSpace);
+                break;
+            case ControlMode.FrontBack:
+                UpdateFrontBackSteering(leftStickInputSpace, rightStickInputSpace);
+                break;
+            case ControlMode.FrontBackLocal:
+                UpdateFrontBackSteering(leftStickInputSpace, rightStickInputSpace, false);
                 break;
         }
     }
@@ -162,6 +170,48 @@ public class SimpleSteering : MonoBehaviour
         movement.CarvedTurn(rightStickInputSpace.x * t);
         movement.SkiddedTurn(rightStickInputSpace.x * (1.0f - t));
 
+    }
+
+    private void UpdateFrontBackSteering(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace, bool inputInWorldSpace = true)
+    {
+        Vector3 leftStickLean = leftStickInputSpace;
+        Vector3 leftStickSkid = leftStickLean;
+        Vector3 rightStickLean = rightStickInputSpace;
+        Vector3 rightStickSkid = rightStickLean;
+        if (inputInWorldSpace)
+        {
+            Vector3 leftStickWorldSpace = TransformToCameraRelativeWorldSpace(leftStickInputSpace);
+            leftStickLean = new Vector3(Vector3.Dot(leftStickWorldSpace, movement.BoardRight), 0.0f, Vector3.Dot(leftStickWorldSpace, movement.BoardForward));
+            leftStickSkid = new Vector3(Vector3.Dot(leftStickWorldSpace, movement.transform.right), 0.0f, Vector3.Dot(leftStickWorldSpace, movement.transform.forward));
+
+            Vector3 rightStickWorldSpace = TransformToCameraRelativeWorldSpace(rightStickInputSpace);
+            rightStickLean = new Vector3(Vector3.Dot(rightStickWorldSpace, movement.BoardRight), 0.0f, Vector3.Dot(rightStickWorldSpace, movement.BoardForward));
+            rightStickSkid = new Vector3(Vector3.Dot(rightStickWorldSpace, movement.transform.right), 0.0f, Vector3.Dot(rightStickWorldSpace, movement.transform.forward));
+        }
+
+        Debug.DrawLine(movement.Front.position, movement.Front.position + leftStickSkid);
+        Debug.DrawLine(movement.Back.position, movement.Back.position + rightStickInputSpace);
+
+        bool isLeaningHorizontal = (Mathf.Abs(leftStickLean.x) > Mathf.Epsilon && Mathf.Abs(rightStickLean.x) > Mathf.Epsilon &&
+            Mathf.Sign(leftStickLean.x) == Mathf.Sign(rightStickLean.x));
+        if (isLeaningHorizontal)
+        {
+            // When both stick are pointing in the same direction there is a lean.
+            float carveAmount = (leftStickLean.x + rightStickLean.x) / 2.0f;
+            movement.CarvedTurn(carveAmount);
+        }
+        else
+        {
+            // Otherwise rotate.
+            float skidAmount = (leftStickSkid.x - rightStickSkid.x) / 2.0f;
+            movement.SkiddedTurn(skidAmount);
+        }
+
+        bool isLeaningVertical = (Mathf.Abs(leftStickLean.z) > Mathf.Epsilon && Mathf.Abs(rightStickLean.z) > Mathf.Epsilon &&
+            Mathf.Sign(leftStickLean.z) == Mathf.Sign(rightStickLean.z));
+        float verticalLeanAmount = (isLeaningVertical ? (leftStickLean.z + rightStickLean.z) / 2.0f : 0.0f);
+        float horizontalLeanAmount = (isLeaningHorizontal ? (leftStickLean.x + rightStickLean.x) / 2.0f : 0.0f);
+        movement.Lean(horizontalLeanAmount, verticalLeanAmount);
     }
 
     private void UpdateSlalomAndCarve(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)

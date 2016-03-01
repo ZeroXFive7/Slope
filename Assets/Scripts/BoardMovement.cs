@@ -61,14 +61,31 @@ public class BoardMovement : MonoBehaviour
     [SerializeField]
     private float flipTorque = 3.0f;
 
+    [Header("Front and Back Control")]
+    [SerializeField]
+    private Transform front = null;
+    [SerializeField]
+    private Transform back = null;
+    [SerializeField]
+    private float frontBackSpeed = 12.0f;
+    [SerializeField]
+    private float timeToFrontBackSpeed = 1.0f;
+
     private Vector3 previousPosition = Vector3.zero;
     private float jumpTimer = 0.0f;
+
+    private Vector3 previousFrontPosition = Vector3.zero;
+    private Vector3 previousBackPosition = Vector3.zero;
 
     public bool IsJumping { get; private set; }
 
     public bool IsWipingOut { get; private set; }
 
     public Vector3 Velocity { get; private set; }
+
+    public Transform Front { get { return front; } }
+
+    public Transform Back { get { return back; } }
 
     public Vector3 BoardForward
     {
@@ -114,6 +131,8 @@ public class BoardMovement : MonoBehaviour
         }
 
         previousPosition = transform.position;
+        previousFrontPosition = front.position;
+        previousBackPosition = back.position;
         Velocity = Vector3.zero;
 
         trails.Reset();
@@ -126,9 +145,9 @@ public class BoardMovement : MonoBehaviour
         hovering.HoverHeightScalar = jumpHeight.Evaluate(t);
     }
 
-    public void JumpRelease()
+    public void TryJumpRelease()
     {
-        if (!IsJumping)
+        if (jumpTimer > 0.0f && !IsJumping)
         {
             StartCoroutine(JumpReleaseCoroutine());
         }
@@ -194,6 +213,36 @@ public class BoardMovement : MonoBehaviour
         StartCoroutine(WipeoutCoroutine());
     }
 
+    public void SetDesiredFrontLinearVelocityNormalized(Vector3 desiredVelocityNormalized)
+    {
+        if (hovering.IsGrounded && !IsJumping)
+        {
+            Vector3 frontVelocity = (front.position - previousFrontPosition) / Time.unscaledDeltaTime;
+            frontVelocity = Vector3.Project(frontVelocity, desiredVelocityNormalized.normalized);
+            previousFrontPosition = front.position;
+
+            Vector3 desiredVelocity = desiredVelocityNormalized * frontBackSpeed;
+            Vector3 acceleration = (desiredVelocity - frontVelocity) / timeToFrontBackSpeed;
+
+            rigidbody.AddForceAtPosition(acceleration, front.position);
+        }
+    }
+
+    public void SetDesiredBackLinearVelocityNormalized(Vector3 desiredVelocityNormalized)
+    {
+        if (hovering.IsGrounded && !IsJumping)
+        {
+            Vector3 backVelocity = (back.position - previousBackPosition) / Time.unscaledDeltaTime;
+            backVelocity = Vector3.Project(backVelocity, desiredVelocityNormalized.normalized);
+            previousBackPosition = back.position;
+
+            Vector3 desiredVelocity = desiredVelocityNormalized * frontBackSpeed;
+            Vector3 acceleration = (desiredVelocity - backVelocity) / timeToFrontBackSpeed;
+
+            rigidbody.AddForceAtPosition(acceleration, back.position);
+        }
+    }
+
     private void SetDesiredLinearVelocity(Vector3 desiredLinearVelocity, float timeToAccelerate)
     {
         Vector3 acceleration = (desiredLinearVelocity - Velocity) / timeToAccelerate;
@@ -222,18 +271,17 @@ public class BoardMovement : MonoBehaviour
     private IEnumerator JumpReleaseCoroutine()
     {
         IsJumping = true;
-
         hovering.HoverHeightScalar = 1.0f;
         hovering.enabled = false;
 
         float t = Mathf.Clamp01(jumpTimer / maxJumpDuration);
+        jumpTimer = 0.0f;
+
         rigidbody.AddForce(hovering.SurfaceNormal * jumpForce.Evaluate(t), ForceMode.Impulse);
 
         yield return new WaitForSeconds(jumpTakeoffDuration);
 
         hovering.enabled = true;
-
-        jumpTimer = 0.0f;
         IsJumping = false;
     }
 }
