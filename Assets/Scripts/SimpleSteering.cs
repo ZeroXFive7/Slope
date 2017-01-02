@@ -5,6 +5,7 @@ public class SimpleSteering : MonoBehaviour
 {
     public enum ControlMode
     {
+        BasicSteer,
         SkidAndCarve,
         TurnAndLean,
         Warthog,
@@ -42,7 +43,7 @@ public class SimpleSteering : MonoBehaviour
     [HideInInspector]
     public ChaseCamera Camera = null;
 
-    private ControlMode controlMode = ControlMode.FrontBack;
+    private ControlMode controlMode = ControlMode.BasicSteer;
 
     public Vector3 TransformToCameraRelativeWorldSpace(Vector3 vectorCameraSpace)
     {
@@ -112,6 +113,9 @@ public class SimpleSteering : MonoBehaviour
 
         switch (controlMode)
         {
+            case ControlMode.BasicSteer:
+                UpdateBasicSteer(leftStickInputSpace, rightStickInputSpace);
+                break;
             case ControlMode.SkidAndCarve:
                 UpdateSkidAndCarve(leftStickInputSpace, rightStickInputSpace);
                 break;
@@ -131,6 +135,15 @@ public class SimpleSteering : MonoBehaviour
                 UpdateFrontBackSteering(leftStickInputSpace, rightStickInputSpace, false);
                 break;
         }
+    }
+
+    private void UpdateBasicSteer(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)
+    {
+        float throttle = leftStickInputSpace.magnitude;
+        float steering = leftStickInputSpace.x;
+        movement.Throttle = throttle;
+        movement.Steering = steering;
+        //movement.Steer(throttle, steering);
     }
 
     private void UpdateSkidAndCarve(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)

@@ -17,6 +17,18 @@ public class BoardMovement : MonoBehaviour
     [SerializeField]
     private float timeToDebugMovementSpeed = 1.0f;
 
+    [Header("Steering")]
+    [SerializeField]
+    private float downhillAcceleration = 20.0f;
+    [SerializeField]
+    private float brakeAcceleration = -20.0f;
+    [SerializeField]
+    private float turnAcceleration = 180.0f;
+    [SerializeField]
+    private float maxSpeed = 10.0f;
+    [SerializeField]
+    private float maxTurnSpeed = 90.0f;
+
     [Header("Skidding")]
     [SerializeField]
     private float timeToSkiddedTurn = 1.0f;
@@ -71,7 +83,12 @@ public class BoardMovement : MonoBehaviour
     [SerializeField]
     private float timeToFrontBackSpeed = 1.0f;
 
+    private float forwardSpeed = 0.0f;
+    private float rotationSpeed = 0.0f;
+    private float turnSpeed = 0.0f;
+
     private Vector3 previousPosition = Vector3.zero;
+    private Quaternion previousRotation = Quaternion.identity;
     private float jumpTimer = 0.0f;
 
     private Vector3 previousFrontPosition = Vector3.zero;
@@ -82,6 +99,7 @@ public class BoardMovement : MonoBehaviour
     public bool IsWipingOut { get; private set; }
 
     public Vector3 Velocity { get; private set; }
+    public Vector3 AngularVelocity { get; private set; }
 
     public Transform Front { get { return front; } }
 
@@ -103,15 +121,58 @@ public class BoardMovement : MonoBehaviour
         }
     }
 
+    private void Awake()
+    {
+        rigidbody.isKinematic = true;
+    }
+
     private void OnEnable()
     {
 
     }
 
+    private float linearAcceleration;
+    private float maxAcceleration = 100.0f;
+
     private void FixedUpdate()
     {
         Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
         previousPosition = transform.position;
+
+        AngularVelocity = AngularVelocityFromTo(previousRotation, transform.rotation) / Time.fixedDeltaTime;
+        AngularVelocity = Vector3.Project(AngularVelocity, rigidbody.transform.up);
+        previousRotation = transform.rotation;
+
+        // Update angular velocity.
+        float absSteering = Mathf.Abs(Steering);
+        if (absSteering > 0.25f)
+        {
+            rotationSpeed += turnAcceleration * Mathf.Sign(Steering) * Time.fixedDeltaTime;
+        }
+        rotationSpeed = Mathf.Clamp(rotationSpeed, -maxTurnSpeed, maxTurnSpeed);
+
+        // Update linear velocity.
+        if (Throttle < 0.25f)
+        {
+            if (forwardSpeed <= brakeAcceleration * Time.fixedDeltaTime)
+            {
+                forwardSpeed = 0.0f;
+            }
+            else
+            {
+                forwardSpeed += brakeAcceleration * Time.fixedDeltaTime;
+            }
+
+            rotationSpeed = 0.0f;
+        }
+        else
+        {
+            forwardSpeed += downhillAcceleration * Time.fixedDeltaTime;
+        }
+        forwardSpeed = Mathf.Clamp(forwardSpeed, 0.0f, maxSpeed);
+
+        transform.rotation *= Quaternion.AngleAxis(rotationSpeed * Time.fixedDeltaTime, transform.up);
+        transform.position += forwardSpeed * transform.forward * Time.fixedDeltaTime;
     }
 
     public void Reset(Transform snapToTransform = null)
@@ -199,6 +260,12 @@ public class BoardMovement : MonoBehaviour
         }
     }
 
+    [System.NonSerialized]
+    public float Throttle = 0.0f;
+
+    [System.NonSerialized]
+    public float Steering = 0.0f;
+
     public void FlipOver()
     {
         if (!hovering.IsGrounded && !IsJumping && Vector3.Dot(Vector3.up, rigidbody.transform.up) < 0.0f)
@@ -256,6 +323,14 @@ public class BoardMovement : MonoBehaviour
         rigidbody.AddTorque(acceleration);
     }
 
+    private void UpdateAngularVelocity(Vector3 rotationAxis, float acceleration, float maxSpeed, float timeToAccelerate = 1.0f)
+    {
+        Vector3 currentAngularVelocity = Vector3.Project(rigidbody.angularVelocity, rotationAxis);
+        float currentSpeed = Mathf.Sign(Vector3.Dot(currentAngularVelocity, rotationAxis)) * currentAngularVelocity.magnitude;
+        float desiredSpeed = Mathf.Clamp(currentSpeed + acceleration * Time.deltaTime / timeToAccelerate, -maxSpeed, maxSpeed);
+        SetDesiredAngularVelocity(rotationAxis, desiredSpeed, Time.fixedDeltaTime);
+    }
+
     private IEnumerator WipeoutCoroutine()
     {
         hovering.enabled = false;
@@ -283,5 +358,29 @@ public class BoardMovement : MonoBehaviour
 
         hovering.enabled = true;
         IsJumping = false;
+    }
+
+    private Quaternion QuaternionFromAngularVelocity(Vector3 angularVelocity)
+    {
+        return Quaternion.AngleAxis(angularVelocity.magnitude * Mathf.Rad2Deg, angularVelocity.normalized);
+    }
+
+    private Vector3 AngularVelocityFromTo(Quaternion from, Quaternion to)
+    {
+        float angle;
+        Vector3 axis;
+        FromToRotation(from, to).ToAngleAxis(out angle, out axis);
+
+        if (angle > 180.0f)
+        {
+            angle -= 360.0f;
+        }
+
+        return angle * axis * Mathf.Deg2Rad;
+    }
+
+    private Quaternion FromToRotation(Quaternion from, Quaternion to)
+    {
+        return to * Quaternion.Inverse(from);
     }
 }
