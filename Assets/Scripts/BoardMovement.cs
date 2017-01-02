@@ -19,6 +19,8 @@ public class BoardMovement : MonoBehaviour
 
     [Header("Steering")]
     [SerializeField]
+    private AnimationCurve turnCurve;
+    [SerializeField]
     private float downhillAcceleration = 20.0f;
     [SerializeField]
     private float brakeAcceleration = -20.0f;
@@ -28,6 +30,12 @@ public class BoardMovement : MonoBehaviour
     private float maxSpeed = 10.0f;
     [SerializeField]
     private float maxTurnSpeed = 90.0f;
+    [SerializeField]
+    private float steeringDeadZone = 0.0f;
+    [SerializeField]
+    private float throttleDeadZone = 0.25f;
+    [SerializeField]
+    private float turnTime = 0.5f;
 
     [Header("Skidding")]
     [SerializeField]
@@ -84,8 +92,9 @@ public class BoardMovement : MonoBehaviour
     private float timeToFrontBackSpeed = 1.0f;
 
     private float forwardSpeed = 0.0f;
+    private float desiredRotationSpeed = 0.0f;
     private float rotationSpeed = 0.0f;
-    private float turnSpeed = 0.0f;
+    private float angularAcceleration = 0.0f;
 
     private Vector3 previousPosition = Vector3.zero;
     private Quaternion previousRotation = Quaternion.identity;
@@ -131,9 +140,6 @@ public class BoardMovement : MonoBehaviour
 
     }
 
-    private float linearAcceleration;
-    private float maxAcceleration = 100.0f;
-
     private void FixedUpdate()
     {
         Velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
@@ -145,14 +151,16 @@ public class BoardMovement : MonoBehaviour
 
         // Update angular velocity.
         float absSteering = Mathf.Abs(Steering);
-        if (absSteering > 0.25f)
+        if (absSteering > steeringDeadZone)
         {
-            rotationSpeed += turnAcceleration * Mathf.Sign(Steering) * Time.fixedDeltaTime;
+            float desiredSpeed = 
+            desiredRotationSpeed = turnCurve.Evaluate(absSteering) * Mathf.Sign(Steering);
         }
-        rotationSpeed = Mathf.Clamp(rotationSpeed, -maxTurnSpeed, maxTurnSpeed);
+
+        rotationSpeed = Mathf.SmoothDamp(rotationSpeed, desiredRotationSpeed, ref angularAcceleration, turnTime, float.MaxValue, Time.fixedDeltaTime);
 
         // Update linear velocity.
-        if (Throttle < 0.25f)
+        if (Throttle < throttleDeadZone)
         {
             if (forwardSpeed <= brakeAcceleration * Time.fixedDeltaTime)
             {

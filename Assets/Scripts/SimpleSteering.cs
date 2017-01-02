@@ -139,11 +139,8 @@ public class SimpleSteering : MonoBehaviour
 
     private void UpdateBasicSteer(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)
     {
-        float throttle = leftStickInputSpace.magnitude;
-        float steering = leftStickInputSpace.x;
-        movement.Throttle = throttle;
-        movement.Steering = steering;
-        //movement.Steer(throttle, steering);
+        movement.Throttle = leftStickInputSpace.magnitude;
+        movement.Steering = SignedAngleBetween(Vector3.forward, leftStickInputSpace.normalized, Vector3.up) / 180.0f;
     }
 
     private void UpdateSkidAndCarve(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)
@@ -230,5 +227,10 @@ public class SimpleSteering : MonoBehaviour
     private void UpdateSlalomAndCarve(Vector3 leftStickInputSpace, Vector3 rightStickInputSpace)
     {
 
+    }
+
+    private float SignedAngleBetween(Vector3 from, Vector3 to, Vector3 normal)
+    {
+        return Vector3.Angle(from, to) * Mathf.Sign(Vector3.Dot(Vector3.Cross(from, to), normal));
     }
 }
