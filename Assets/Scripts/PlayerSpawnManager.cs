@@ -12,7 +12,7 @@ public class PlayerSpawnManager : MonoBehaviour
 
     [Header("Prefab References")]
     [SerializeField]
-    private SimpleSteering playerPrefab = null;
+    private PlayerController playerPrefab = null;
     [SerializeField]
     private ChaseCamera playerCameraPrefab = null;
 
@@ -33,7 +33,7 @@ public class PlayerSpawnManager : MonoBehaviour
     private HashSet<int> activePlayerInputIds = new HashSet<int>();
 
     [HideInInspector]
-    public List<SimpleSteering> Players = new List<SimpleSteering>();
+    public List<PlayerController> Players = new List<PlayerController>();
 
     private void Awake()
     {
@@ -72,14 +72,14 @@ public class PlayerSpawnManager : MonoBehaviour
     {
         int playerLayerId = LayerMask.NameToLayer(layerName);
 
-        SimpleSteering newPlayer = Instantiate(playerPrefab);
+        PlayerController newPlayer = Instantiate(playerPrefab);
         ChaseCamera playerCamera = Instantiate(playerCameraPrefab);
 
         newPlayer.PlayerInputId = playerInputId;
         newPlayer.Camera = playerCamera;
         newPlayer.GetComponent<BoardTrailRenderers>().Colors = GetNextBoardColors();
 
-        playerCamera.Board = newPlayer.GetComponent<BoardMovement>();
+        playerCamera.Player = newPlayer.transform;
 
         Players.Add(newPlayer);
 
@@ -92,7 +92,7 @@ public class PlayerSpawnManager : MonoBehaviour
         {
             if (Players[i].PlayerInputId == playerInputId)
             {
-                SimpleSteering player = Players[i];
+                PlayerController player = Players[i];
                 Players.RemoveAt(i);
                 Destroy(player.Camera.gameObject);
                 Destroy(player.gameObject);
@@ -106,7 +106,7 @@ public class PlayerSpawnManager : MonoBehaviour
         {
             if (Players[i].PlayerInputId == playerInputId)
             {
-                SimpleSteering player = Players[i];
+                PlayerController player = Players[i];
                 player.Reset(GetNextSpawnPoint());
             }
         }

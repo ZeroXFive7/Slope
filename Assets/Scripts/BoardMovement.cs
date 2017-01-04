@@ -19,6 +19,8 @@ public class BoardMovement : MonoBehaviour
 
     [Header("Steering")]
     [SerializeField]
+    private float surfaceInclineAngle = 15.0f;
+    [SerializeField]
     private AnimationCurve turnCurve;
     [SerializeField]
     private float downhillAcceleration = 20.0f;
@@ -91,6 +93,7 @@ public class BoardMovement : MonoBehaviour
     [SerializeField]
     private float timeToFrontBackSpeed = 1.0f;
 
+    private Vector3 velocity = Vector3.zero;
     private float forwardSpeed = 0.0f;
     private float desiredRotationSpeed = 0.0f;
     private float rotationSpeed = 0.0f;
@@ -132,7 +135,7 @@ public class BoardMovement : MonoBehaviour
 
     private void Awake()
     {
-        rigidbody.isKinematic = true;
+        //rigidbody.isKinematic = true;
     }
 
     private void OnEnable()
@@ -159,28 +162,42 @@ public class BoardMovement : MonoBehaviour
 
         rotationSpeed = Mathf.SmoothDamp(rotationSpeed, desiredRotationSpeed, ref angularAcceleration, turnTime, float.MaxValue, Time.fixedDeltaTime);
 
-        // Update linear velocity.
+        Vector3 acceleration = Physics.gravity;
+        RaycastHit hit;
+        if (Physics.Raycast(transform.position, -Vector3.up, out hit, 0.01f))
+        {
+            Vector3 surfaceNormal = hit.normal;
+            Vector3 surfaceTangent = Vector3.ProjectOnPlane(transform.forward, surfaceNormal).normalized;
+            acceleration = Vector3.Project(Physics.gravity, surfaceTangent);
+        }
+
+        velocity += acceleration * Time.fixedDeltaTime;
+
+        //// Update linear velocity.
         if (Throttle < throttleDeadZone)
         {
-            if (forwardSpeed <= brakeAcceleration * Time.fixedDeltaTime)
-            {
-                forwardSpeed = 0.0f;
-            }
-            else
-            {
-                forwardSpeed += brakeAcceleration * Time.fixedDeltaTime;
-            }
+        //    if (forwardSpeed <= brakeAcceleration * Time.fixedDeltaTime)
+        //    {
+        //        forwardSpeed = 0.0f;
+        //    }
+        //    else
+        //    {
+        //        forwardSpeed += brakeAcceleration * Time.fixedDeltaTime;
+        //    }
 
             rotationSpeed = 0.0f;
         }
-        else
-        {
-            forwardSpeed += downhillAcceleration * Time.fixedDeltaTime;
-        }
+        //else
+        //{
+        //    forwardSpeed += downhillAcceleration * Time.fixedDeltaTime;
+        //}
         forwardSpeed = Mathf.Clamp(forwardSpeed, 0.0f, maxSpeed);
 
-        transform.rotation *= Quaternion.AngleAxis(rotationSpeed * Time.fixedDeltaTime, transform.up);
-        transform.position += forwardSpeed * transform.forward * Time.fixedDeltaTime;
+        Quaternion rotation = Quaternion.AngleAxis(rotationSpeed * Time.fixedDeltaTime, transform.up);
+        velocity = rotation * velocity;
+
+        rigidbody.MoveRotation(transform.rotation * rotation);
+        rigidbody.MovePosition(rigidbody.position + velocity * Time.fixedDeltaTime);
     }
 
     public void Reset(Transform snapToTransform = null)

@@ -18,7 +18,7 @@ public class ChaseCamera : MonoBehaviour
     private new Camera camera = null;
 
     [HideInInspector]
-    public BoardMovement Board = null;
+    public Transform Player = null;
 
     public Rect Viewport
     {
@@ -41,17 +41,16 @@ public class ChaseCamera : MonoBehaviour
         }
         else
         {
-            transform.position = Board.transform.position + cameraOffset;
-            transform.rotation = Quaternion.LookRotation(Board.transform.position + targetOffset - transform.position, Vector3.up);
+            transform.position = Player.transform.position + cameraOffset;
+            transform.rotation = Quaternion.LookRotation(Player.transform.position + targetOffset - transform.position, Vector3.up);
         }
     }
 
     private Vector3 TransformOffset(Vector3 offset)
     {
-        Vector3 steeringForward = (Board.Velocity.magnitude > 0.001f && !Board.IsWipingOut) ? Board.Velocity : Board.transform.forward;
-        steeringForward = Vector3.ProjectOnPlane(steeringForward, Vector3.up).normalized;
-
+        Vector3 steeringForward = Vector3.ProjectOnPlane(Player.forward, Vector3.up).normalized;
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
-        return Board.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
+
+        return Player.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
     }
 }
