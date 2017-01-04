@@ -2,6 +2,14 @@
 
 public class PlayerDynamics : MonoBehaviour
 {
+    [Header("Physical Properties")]
+    [SerializeField]
+    private float mass = 1.0f;
+    [SerializeField]
+    private float kineticFrictionCoefficient = 0.1f;
+    [SerializeField]
+    private float staticFrictionCoefficient = 0.3f;
+
     // Component references.
     private new CharacterController collider = null;
 
@@ -29,22 +37,15 @@ public class PlayerDynamics : MonoBehaviour
 
     private void FixedUpdate()
     {
-        Vector3 acceleration = Vector3.zero;
-
-        if (!collider.isGrounded || !CollidedWith(CollisionFlags.Below))
-        {
-            acceleration += Physics.gravity;
-        }
-        else
-        {
-            Vector3 surfaceNormal = GetSurfaceNormal();
-            acceleration = Vector3.ProjectOnPlane(Physics.gravity, surfaceNormal);
-        }
-
+        // Measure velocity.
         Vector3 velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
         previousPosition = transform.position;
 
+        // Integrate velocity.
+        Vector3 acceleration = GetForces(velocity) / mass;
         velocity += acceleration * Time.fixedDeltaTime;
+
+        // Integrate position.
         collider.Move(velocity * Time.fixedDeltaTime);
     }
 
@@ -53,6 +54,35 @@ public class PlayerDynamics : MonoBehaviour
     private bool CollidedWith(CollisionFlags flag)
     {
         return (collider.collisionFlags & flag) != 0;
+    }
+
+    private Vector3 GetForces(Vector3 velocity)
+    {
+        Vector3 forceGravity = mass * Physics.gravity;
+        Vector3 forceFriction = Vector3.zero;
+
+        if (collider.isGrounded && CollidedWith(CollisionFlags.Below))
+        {
+            Vector3 surfaceNormal = GetSurfaceNormal();
+
+            Vector3 forceTangent = Vector3.ProjectOnPlane(forceGravity, surfaceNormal);
+            Vector3 forceNormal = Vector3.Project(forceGravity, surfaceNormal);
+
+            if (velocity.magnitude > 0.001f)
+            {
+                // Kinetic friction.
+                forceFriction = -velocity.normalized * forceNormal.magnitude * kineticFrictionCoefficient;
+            }
+            else
+            {
+                // Static friction.
+                forceFriction = -forceTangent.normalized * forceNormal.magnitude * staticFrictionCoefficient;
+            }
+
+            forceGravity = forceTangent;
+        }
+
+        return forceGravity + forceFriction;
     }
 
     private Vector3 GetSurfaceNormal()
