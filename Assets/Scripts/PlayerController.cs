@@ -38,7 +38,7 @@ public class PlayerController : MonoBehaviour
     private void FixedUpdate()
     {
         Vector3 leftStickInputSpace = new Vector3(input.GetAxis("Left Stick Horizontal"), 0.0f, input.GetAxis("Left Stick Vertical"));
-        dynamics.Steering = leftStickInputSpace.x;
+        dynamics.TurnNormalized = leftStickInputSpace.x;
     }
 
     public void Reset(Transform snapToTransform = null)
