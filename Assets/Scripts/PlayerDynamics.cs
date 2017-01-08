@@ -14,6 +14,8 @@ public class PlayerDynamics : MonoBehaviour
 
     [Header("Controller Behaviors")]
     [SerializeField]
+    private float defaultSurfaceDistance = 0.01f;
+    [SerializeField]
     private float surfaceClampingThreshold = 0.075f;
 
     [SerializeField]
@@ -32,7 +34,7 @@ public class PlayerDynamics : MonoBehaviour
     private new CharacterController collider = null;
 
     // Local state.
-    private Vector3 previousPosition = Vector3.zero;
+    private Vector3 velocity = Vector3.zero;
 
     [System.NonSerialized]
     public float TurnNormalized = 0.0f;
@@ -62,7 +64,7 @@ public class PlayerDynamics : MonoBehaviour
             transform.rotation = snapToTransform.rotation;
         }
 
-        previousPosition = transform.position;
+        velocity = Vector3.zero;
     }
 
     private void Awake()
@@ -72,13 +74,11 @@ public class PlayerDynamics : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Measure velocity.
-        Vector3 velocity = (transform.position - previousPosition) / Time.fixedDeltaTime;
-        previousPosition = transform.position;
+        Vector3 surfaceNormal = Vector3.zero;
+        Vector3 surfacePoint = Vector3.zero;
+        bool isGrounded = TryGetSurface(defaultSurfaceDistance, out surfaceNormal, out surfacePoint);
 
         // Project velocity into surface plane to avoid popping.
-        Vector3 surfaceNormal = GetSurfaceNormal();
-        bool isGrounded = collider.isGrounded && CollidedWith(CollisionFlags.Below);
         if (isGrounded)
         {
             velocity = Vector3.ProjectOnPlane(velocity, surfaceNormal);
@@ -93,18 +93,49 @@ public class PlayerDynamics : MonoBehaviour
         velocity = rotation * velocity;
 
         // Integrate position.
-        Move(velocity);
+        bool wasGrounded = isGrounded;
+        collider.Move(velocity * Time.fixedDeltaTime);
 
-        if (collider.isGrounded)
+        // Test grounding to see if snap is necesarry.
+        isGrounded = TryGetSurface(defaultSurfaceDistance, out surfaceNormal, out surfacePoint);
+
+        // Try to snap to surface.
+        if (wasGrounded && !isGrounded)
+        {
+            isGrounded = TryGetSurface(surfaceClampingThreshold, out surfaceNormal, out surfacePoint);
+            if (isGrounded)
+            {
+                collider.Move(surfacePoint - transform.position);
+            }
+            else
+            {
+                Debug.Log("NOT GROUNDED");
+            }
+        }
+
+        // Rotate to face velocity.
+        if (isGrounded)
         {
             debugLine.gameObject.SetActive(true);
             debugLine.transform.position = transform.position;
             debugLine.transform.rotation = Quaternion.LookRotation(surfaceNormal);
             debugLine.transform.localScale = new Vector3(1.0f, 1.0f, 5.0f);
+
+            Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, surfaceNormal);
+            if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
+            {
+                transform.rotation = Quaternion.LookRotation(velocityForward.normalized, surfaceNormal);
+            }
         }
         else
         {
             debugLine.gameObject.SetActive(false);
+
+            Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, Vector3.up);
+            if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
+            {
+                transform.rotation = Quaternion.LookRotation(velocityForward.normalized, surfaceNormal);
+            }
         }
     }
 
@@ -117,18 +148,27 @@ public class PlayerDynamics : MonoBehaviour
 
         if (isGrounded)
         {
+            Vector3 forwardOnSurface = Vector3.ProjectOnPlane(transform.forward, surfaceNormal).normalized;
+
+            // Calculate forces in surface plane.
             Vector3 forceTangent = Vector3.ProjectOnPlane(forceGravity, surfaceNormal);
+            Vector3 forceParallel = Vector3.Project(forceTangent, forwardOnSurface);
+            Vector3 forcePerpendicular = forceTangent - forceParallel;
+
+            // Calculate force normal to surface plane.
             Vector3 forceNormal = Vector3.Project(forceGravity, surfaceNormal);
+
+            float frictionMagnitude = forceNormal.magnitude + forcePerpendicular.magnitude;
 
             if (velocity.magnitude > 0.001f)
             {
                 // Kinetic friction.
-                forceFriction = -velocity.normalized * forceNormal.magnitude * kineticFrictionCoefficient;
+                forceFriction = -velocity.normalized * frictionMagnitude * kineticFrictionCoefficient;
             }
             else
             {
                 // Static friction.
-                forceFriction = -forceTangent.normalized * forceNormal.magnitude * staticFrictionCoefficient;
+                forceFriction = -forceTangent.normalized * frictionMagnitude * staticFrictionCoefficient;
             }
 
             forceGravity = forceTangent;
@@ -150,36 +190,6 @@ public class PlayerDynamics : MonoBehaviour
         return Mathf.Sign(TurnNormalized) * speed / turnRadius * Mathf.Rad2Deg;
     }
 
-    private void Move(Vector3 velocity)
-    {
-        bool wasGrounded = collider.isGrounded;
-        collider.Move(velocity * Time.fixedDeltaTime);
-
-        if (wasGrounded && !collider.isGrounded)
-        {
-            Vector3 newSurfaceNormal = Vector3.zero;
-            Vector3 newPoint = Vector3.zero;
-            if (TryGetSurfaceNormal(transform.position, -Vector3.up, surfaceClampingThreshold, out newSurfaceNormal, out newPoint))
-            {
-                // Clamp to surface.
-                Vector3 delta = newPoint - transform.position;
-                velocity += delta;
-                collider.Move(delta);
-            }
-            else
-            {
-                Debug.Log("NOT GROUNDED");
-            }
-        }
-
-        // Rotate to face velocity.
-        Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, Vector3.up);
-        if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
-        {
-            collider.transform.rotation = Quaternion.LookRotation(velocityForward.normalized, Vector3.up);
-        }
-    }
-
     #endregion
 
     #region Helpers
@@ -189,36 +199,19 @@ public class PlayerDynamics : MonoBehaviour
         return (collider.collisionFlags & flag) != 0;
     }
 
-    private Vector3 GetSurfaceNormal()
+    private bool TryGetSurface(float maxDistance, out Vector3 surfaceNormal, out Vector3 surfacePoint)
     {
-        Vector3 normal = Vector3.zero;
-
-        Vector3 raycastOrigin = transform.position + transform.up * collider.height / 2.0f;
-        Vector3 raycastDirection = -transform.up;
-        float maxRaycastDistance = collider.height;
-
-        Vector3 pointScratch;
-        Vector3 normalScratch;
-        for (int i = 0; i < SURFACE_RAYCAST_OFFSET_LOCAL_DIRECTIONS.Length; ++i)
-        {
-            if (TryGetSurfaceNormal(
-                raycastOrigin + transform.TransformVector(SURFACE_RAYCAST_OFFSET_LOCAL_DIRECTIONS[i] * SURFACE_RAYCAST_OFFSET_DISTANCE), 
-                raycastDirection, 
-                maxRaycastDistance, 
-                out normalScratch,
-                out pointScratch))
-            {
-                normal += normalScratch;
-            }
-        }
-
-        return normal.normalized;
+        float capHeight = collider.radius;
+        float bodyHeight = collider.height - 2.0f * capHeight;
+        float rayOriginHeight = capHeight + bodyHeight;
+        Vector3 origin = transform.position + transform.up * rayOriginHeight;
+        return TryGetSurfaceNormal(origin, -transform.up, rayOriginHeight + maxDistance, out surfaceNormal, out surfacePoint);
     }
 
     private bool TryGetSurfaceNormal(Vector3 raycastOrigin, Vector3 raycastDirection, float maxRaycastDistance, out Vector3 surfaceNormal, out Vector3 surfacePoint)
     {
         RaycastHit hit;
-        if (Physics.Raycast(raycastOrigin, raycastDirection, out hit, maxRaycastDistance))
+        if (Physics.SphereCast(raycastOrigin, collider.radius, raycastDirection, out hit, maxRaycastDistance))
         {
             surfaceNormal = hit.normal;
             surfacePoint = hit.point;

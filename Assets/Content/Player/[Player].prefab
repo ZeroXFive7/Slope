@@ -472,9 +472,9 @@ MonoBehaviour:
   mass: 1
   kineticFrictionCoefficient: 0.1
   staticFrictionCoefficient: 0.3
-  surfaceClampingThreshold: 0.075
+  surfaceClampingThreshold: 0.2
   maxTurnRadius: 30
-  minTurnRadius: 3
+  minTurnRadius: 10
   debugLine: {fileID: 4000011246460466}
 --- !u!143 &143000013425732830
 CharacterController:
