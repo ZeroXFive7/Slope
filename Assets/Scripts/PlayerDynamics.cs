@@ -12,10 +12,17 @@ public class PlayerDynamics : MonoBehaviour
     [SerializeField]
     private float staticFrictionCoefficient = 0.3f;
 
+    [Header("Controller Behaviors")]
+    [SerializeField]
+    private float surfaceClampingThreshold = 0.075f;
+
     [SerializeField]
     private float maxTurnRadius = 30.0f;
     [SerializeField]
     private float minTurnRadius = 3.0f;
+
+    [SerializeField]
+    private Transform debugLine = null;
 
     #endregion
 
@@ -86,13 +93,18 @@ public class PlayerDynamics : MonoBehaviour
         velocity = rotation * velocity;
 
         // Integrate position.
-        collider.Move(velocity * Time.fixedDeltaTime);
+        Move(velocity);
 
-        // Rotate to face velocity.
-        Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, Vector3.up);
-        if (collider.isGrounded && velocityForward.sqrMagnitude >= Mathf.Epsilon)
+        if (collider.isGrounded)
         {
-            collider.transform.rotation = Quaternion.LookRotation(velocityForward.normalized, Vector3.up);
+            debugLine.gameObject.SetActive(true);
+            debugLine.transform.position = transform.position;
+            debugLine.transform.rotation = Quaternion.LookRotation(surfaceNormal);
+            debugLine.transform.localScale = new Vector3(1.0f, 1.0f, 5.0f);
+        }
+        else
+        {
+            debugLine.gameObject.SetActive(false);
         }
     }
 
@@ -129,13 +141,43 @@ public class PlayerDynamics : MonoBehaviour
     {
         float speed = linearVelocity.magnitude;
         float absTurnNormalized = Mathf.Abs(TurnNormalized);
-        if (speed <= Mathf.Epsilon || absTurnNormalized <= Mathf.Epsilon)
+        if (!isGrounded || speed <= Mathf.Epsilon || absTurnNormalized <= Mathf.Epsilon)
         {
             return 0.0f;
         }
 
         float turnRadius = Mathf.Lerp(maxTurnRadius, minTurnRadius, absTurnNormalized);
         return Mathf.Sign(TurnNormalized) * speed / turnRadius * Mathf.Rad2Deg;
+    }
+
+    private void Move(Vector3 velocity)
+    {
+        bool wasGrounded = collider.isGrounded;
+        collider.Move(velocity * Time.fixedDeltaTime);
+
+        if (wasGrounded && !collider.isGrounded)
+        {
+            Vector3 newSurfaceNormal = Vector3.zero;
+            Vector3 newPoint = Vector3.zero;
+            if (TryGetSurfaceNormal(transform.position, -Vector3.up, surfaceClampingThreshold, out newSurfaceNormal, out newPoint))
+            {
+                // Clamp to surface.
+                Vector3 delta = newPoint - transform.position;
+                velocity += delta;
+                collider.Move(delta);
+            }
+            else
+            {
+                Debug.Log("NOT GROUNDED");
+            }
+        }
+
+        // Rotate to face velocity.
+        Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, Vector3.up);
+        if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
+        {
+            collider.transform.rotation = Quaternion.LookRotation(velocityForward.normalized, Vector3.up);
+        }
     }
 
     #endregion
@@ -155,6 +197,7 @@ public class PlayerDynamics : MonoBehaviour
         Vector3 raycastDirection = -transform.up;
         float maxRaycastDistance = collider.height;
 
+        Vector3 pointScratch;
         Vector3 normalScratch;
         for (int i = 0; i < SURFACE_RAYCAST_OFFSET_LOCAL_DIRECTIONS.Length; ++i)
         {
@@ -162,7 +205,8 @@ public class PlayerDynamics : MonoBehaviour
                 raycastOrigin + transform.TransformVector(SURFACE_RAYCAST_OFFSET_LOCAL_DIRECTIONS[i] * SURFACE_RAYCAST_OFFSET_DISTANCE), 
                 raycastDirection, 
                 maxRaycastDistance, 
-                out normalScratch))
+                out normalScratch,
+                out pointScratch))
             {
                 normal += normalScratch;
             }
@@ -171,14 +215,17 @@ public class PlayerDynamics : MonoBehaviour
         return normal.normalized;
     }
 
-    private bool TryGetSurfaceNormal(Vector3 raycastOrigin, Vector3 raycastDirection, float maxRaycastDistance, out Vector3 surfaceNormal)
+    private bool TryGetSurfaceNormal(Vector3 raycastOrigin, Vector3 raycastDirection, float maxRaycastDistance, out Vector3 surfaceNormal, out Vector3 surfacePoint)
     {
         RaycastHit hit;
         if (Physics.Raycast(raycastOrigin, raycastDirection, out hit, maxRaycastDistance))
         {
             surfaceNormal = hit.normal;
+            surfacePoint = hit.point;
             return true;
         }
+
+        surfacePoint = Vector3.zero;
         surfaceNormal = Vector3.zero;
         return false;
     }
