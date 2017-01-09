@@ -96,11 +96,8 @@ public class PlayerDynamics : MonoBehaviour
         bool wasGrounded = isGrounded;
         collider.Move(velocity * Time.fixedDeltaTime);
 
-        // Test grounding to see if snap is necesarry.
-        isGrounded = TryGetSurface(defaultSurfaceDistance, out surfaceNormal, out surfacePoint);
-
         // Try to snap to surface.
-        if (wasGrounded && !isGrounded)
+        if (wasGrounded)
         {
             isGrounded = TryGetSurface(surfaceClampingThreshold, out surfaceNormal, out surfacePoint);
             if (isGrounded)
