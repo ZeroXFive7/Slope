@@ -470,9 +470,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mass: 1
-  kineticFrictionCoefficient: 0.1
+  kineticFrictionCoefficient: 0.2
   staticFrictionCoefficient: 0.3
-  surfaceClampingThreshold: 0.2
+  defaultSurfaceDistance: 0.08
+  surfaceClampingThreshold: 0.1
   maxTurnRadius: 30
   minTurnRadius: 10
   debugLine: {fileID: 4000011246460466}
