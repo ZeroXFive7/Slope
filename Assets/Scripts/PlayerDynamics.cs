@@ -19,6 +19,8 @@ public class PlayerDynamics : MonoBehaviour
     private float surfaceClampingThreshold = 0.075f;
 
     [SerializeField]
+    private float maxTurnSpeed = 90.0f;
+    [SerializeField]
     private float maxTurnRadius = 30.0f;
     [SerializeField]
     private float minTurnRadius = 3.0f;
@@ -37,7 +39,7 @@ public class PlayerDynamics : MonoBehaviour
     private Vector3 velocity = Vector3.zero;
 
     [System.NonSerialized]
-    public float TurnNormalized = 0.0f;
+    public Vector3 DesiredForward = Vector3.forward;
 
     #endregion
 
@@ -176,15 +178,20 @@ public class PlayerDynamics : MonoBehaviour
 
     private float GetAngularSpeed(Vector3 linearVelocity, bool isGrounded)
     {
-        float speed = linearVelocity.magnitude;
-        float absTurnNormalized = Mathf.Abs(TurnNormalized);
-        if (!isGrounded || speed <= Mathf.Epsilon || absTurnNormalized <= Mathf.Epsilon)
+        Vector3 desiredForwardPlanar = Vector3.ProjectOnPlane(DesiredForward, transform.up).normalized;
+        float angleToDesiredForward = Vector3.Angle(transform.forward, desiredForwardPlanar);
+        float desiredSpeed = angleToDesiredForward / Time.fixedDeltaTime;
+
+        float direction = Mathf.Sign(Vector3.Dot(Vector3.Cross(transform.forward, DesiredForward), transform.up));
+
+        float linearSpeed = linearVelocity.magnitude;
+        if (!isGrounded || linearSpeed <= Mathf.Epsilon || angleToDesiredForward <= Mathf.Epsilon)
         {
             return 0.0f;
         }
 
-        float turnRadius = Mathf.Lerp(maxTurnRadius, minTurnRadius, absTurnNormalized);
-        return Mathf.Sign(TurnNormalized) * speed / turnRadius * Mathf.Rad2Deg;
+        float speed = Mathf.Max(maxTurnSpeed, desiredSpeed);
+        return direction * speed;
     }
 
     #endregion

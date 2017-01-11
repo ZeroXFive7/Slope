@@ -19,6 +19,8 @@ public class ChaseCamera : MonoBehaviour
 
     [HideInInspector]
     public Transform Player = null;
+    [HideInInspector]
+    public Vector3 TargetForward = Vector3.forward;
 
     public Rect Viewport
     {
@@ -48,7 +50,7 @@ public class ChaseCamera : MonoBehaviour
 
     private Vector3 TransformOffset(Vector3 offset)
     {
-        Vector3 steeringForward = Vector3.ProjectOnPlane(Player.forward, Vector3.up).normalized;
+        Vector3 steeringForward = Vector3.ProjectOnPlane(TargetForward, Vector3.up).normalized;
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
 
         return Player.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
