@@ -50,7 +50,7 @@ public class PlayerController : MonoBehaviour
         Vector3 rightStickInputSpace = new Vector3(input.GetAxis("Right Stick Horizontal"), 0.0f, input.GetAxis("Right Stick Vertical"));
 
         targetForward = Vector3.ProjectOnPlane(targetForward, transform.up).normalized;
-        targetForward = Quaternion.AngleAxis(rightStickInputSpace.x * turnSpeedDegrees * Time.fixedDeltaTime, transform.up) * targetForward;
+        targetForward = Quaternion.AngleAxis(leftStickInputSpace.x * turnSpeedDegrees * Time.fixedDeltaTime, transform.up) * targetForward;
         turnDebugTarget.transform.position = transform.position + targetForward * 5.0f;
 
         Camera.TargetForward = targetForward;

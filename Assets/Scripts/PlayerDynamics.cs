@@ -21,9 +21,7 @@ public class PlayerDynamics : MonoBehaviour
     [SerializeField]
     private float maxTurnSpeed = 90.0f;
     [SerializeField]
-    private float maxTurnRadius = 30.0f;
-    [SerializeField]
-    private float minTurnRadius = 3.0f;
+    private float maxLookSpeed = 360.0f;
 
     [SerializeField]
     private Transform debugLine = null;
@@ -72,6 +70,7 @@ public class PlayerDynamics : MonoBehaviour
     private void Awake()
     {
         collider = GetComponent<CharacterController>();
+        debugLine.gameObject.SetActive(false);
     }
 
     private void FixedUpdate()
@@ -90,9 +89,8 @@ public class PlayerDynamics : MonoBehaviour
         Vector3 acceleration = GetForces(velocity, isGrounded, surfaceNormal) / mass;
         velocity += acceleration * Time.fixedDeltaTime;
 
-        float angularSpeed = GetAngularSpeed(velocity, isGrounded);
-        Quaternion rotation = Quaternion.AngleAxis(angularSpeed * Time.fixedDeltaTime, Vector3.up);
-        velocity = rotation * velocity;
+        Quaternion velocityRotation = FaceTarget(velocity, DesiredForward, surfaceNormal, maxTurnSpeed);
+        velocity = velocityRotation * velocity;
 
         // Integrate position.
         bool wasGrounded = isGrounded;
@@ -113,29 +111,12 @@ public class PlayerDynamics : MonoBehaviour
         }
 
         // Rotate to face velocity.
-        if (isGrounded)
-        {
-            debugLine.gameObject.SetActive(true);
-            debugLine.transform.position = transform.position;
-            debugLine.transform.rotation = Quaternion.LookRotation(surfaceNormal);
-            debugLine.transform.localScale = new Vector3(1.0f, 1.0f, 5.0f);
+        Vector3 currentForward = Vector3.ProjectOnPlane(transform.forward, surfaceNormal);
 
-            Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, surfaceNormal);
-            if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
-            {
-                transform.rotation = Quaternion.LookRotation(velocityForward.normalized, surfaceNormal);
-            }
-        }
-        else
-        {
-            debugLine.gameObject.SetActive(false);
+        Quaternion bodyRotation = FaceTarget(currentForward, DesiredForward, surfaceNormal, maxLookSpeed);
+        currentForward = bodyRotation * currentForward;
 
-            Vector3 velocityForward = Vector3.ProjectOnPlane(velocity, Vector3.up);
-            if (velocityForward.sqrMagnitude >= Mathf.Epsilon)
-            {
-                transform.rotation = Quaternion.LookRotation(velocityForward.normalized, surfaceNormal);
-            }
-        }
+        transform.rotation = Quaternion.LookRotation(currentForward, surfaceNormal);
     }
 
     #region Dynamics
@@ -176,22 +157,23 @@ public class PlayerDynamics : MonoBehaviour
         return forceGravity + forceFriction;
     }
 
-    private float GetAngularSpeed(Vector3 linearVelocity, bool isGrounded)
+    private Quaternion FaceTarget(Vector3 current, Vector3 target, Vector3 normal, float maxSpeed)
     {
-        Vector3 desiredForwardPlanar = Vector3.ProjectOnPlane(DesiredForward, transform.up).normalized;
-        float angleToDesiredForward = Vector3.Angle(transform.forward, desiredForwardPlanar);
-        float desiredSpeed = angleToDesiredForward / Time.fixedDeltaTime;
+        Vector3 currentPlanar = Vector3.ProjectOnPlane(current, normal);
+        Vector3 targetPlanar = Vector3.ProjectOnPlane(target, normal);
+        float angleToTarget = Vector3.Angle(currentPlanar, targetPlanar);
+        float direction = Mathf.Sign(Vector3.Dot(Vector3.Cross(currentPlanar, targetPlanar), normal));
 
-        float direction = Mathf.Sign(Vector3.Dot(Vector3.Cross(transform.forward, DesiredForward), transform.up));
-
-        float linearSpeed = linearVelocity.magnitude;
-        if (!isGrounded || linearSpeed <= Mathf.Epsilon || angleToDesiredForward <= Mathf.Epsilon)
+        Quaternion rotation = Quaternion.identity;
+        if (angleToTarget < (maxTurnSpeed * Time.fixedDeltaTime))
         {
-            return 0.0f;
+            rotation = Quaternion.AngleAxis(angleToTarget * direction, normal);
         }
-
-        float speed = Mathf.Max(maxTurnSpeed, desiredSpeed);
-        return direction * speed;
+        else
+        {
+            rotation = Quaternion.AngleAxis(maxSpeed * Time.fixedDeltaTime * direction, normal);
+        }
+        return rotation;
     }
 
     #endregion
