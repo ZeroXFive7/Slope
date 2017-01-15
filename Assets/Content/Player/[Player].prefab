@@ -458,11 +458,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea11ce200bb934b409c19eea7664d981, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mass: 1
   kineticFrictionCoefficient: 0.2
   staticFrictionCoefficient: 0.3
+  maxSkidFrictionMagnitude: 25
   defaultSurfaceDistance: 0.08
-  surfaceClampingThreshold: 0.1
   maxSpeed: 20
   minSpeedTurnRadius: 3
   maxSpeedTurnRadius: 15

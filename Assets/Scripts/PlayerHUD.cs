@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 
 public class PlayerHUD : MonoBehaviour
 {
@@ -7,9 +8,14 @@ public class PlayerHUD : MonoBehaviour
     [SerializeField]
     private bool reportSpeedInMPH = false;
     [SerializeField]
-    private UnityEngine.UI.Text speedometerLabelText = null;
+    private Text speedometerLabelText = null;
     [SerializeField]
-    private UnityEngine.UI.Text speedometerText = null;
+    private Text speedometerText = null;
+
+    [SerializeField]
+    private Text friction = null;
+    [SerializeField]
+    private Text gravity = null;
 
     #endregion
 
@@ -66,5 +72,8 @@ public class PlayerHUD : MonoBehaviour
             speedometerLabelText.text = "M/S";
             speedometerText.text = Mathf.RoundToInt(Player.Dynamics.Speed).ToString();
         }
+
+        friction.text = Player.Dynamics.FrictionForceMagnitude.ToString("F2");
+        gravity.text = Player.Dynamics.GravityForceMagnitude.ToString("F2");
     }
 }

@@ -6,17 +6,15 @@ public class PlayerDynamics : MonoBehaviour
 
     [Header("Physical Properties")]
     [SerializeField]
-    private float mass = 1.0f;
-    [SerializeField]
     private float kineticFrictionCoefficient = 0.1f;
     [SerializeField]
     private float staticFrictionCoefficient = 0.3f;
+    [SerializeField]
+    private float maxSkidFrictionMagnitude = 10.0f;
 
     [Header("Controller Behaviors")]
     [SerializeField]
     private float defaultSurfaceDistance = 0.01f;
-    [SerializeField]
-    private float surfaceClampingThreshold = 0.075f;
 
     [Header("Steering")]
     [SerializeField]
@@ -25,8 +23,6 @@ public class PlayerDynamics : MonoBehaviour
     private float minSpeedTurnRadius = 3.0f;
     [SerializeField]
     private float maxSpeedTurnRadius = 15.0f;
-    //[SerializeField]
-    //private float maxTurnSpeed = 90.0f;
     [SerializeField]
     private float maxLookSpeed = 360.0f;
 
@@ -36,7 +32,7 @@ public class PlayerDynamics : MonoBehaviour
 
     // Component references.
     private new Rigidbody rigidbody = null;
-    private CapsuleCollider collider = null;
+    private new CapsuleCollider collider = null;
 
     // Local state.
     private Vector3 velocity = Vector3.zero;
@@ -51,6 +47,9 @@ public class PlayerDynamics : MonoBehaviour
     {
         get { return velocity.magnitude; }
     }
+
+    public float FrictionForceMagnitude { get; private set; }
+    public float GravityForceMagnitude { get; private set; }
 
     [System.NonSerialized]
     public Vector3 DesiredForward = Vector3.forward;
@@ -102,7 +101,7 @@ public class PlayerDynamics : MonoBehaviour
         surface = GetSurface(surface);
 
         // Integrate velocity.
-        Vector3 acceleration = GetForces(velocity, surface) / mass;
+        Vector3 acceleration = GetForces(velocity, surface) / rigidbody.mass;
         velocity += acceleration * Time.fixedDeltaTime;
 
         if (surface.IsOnSurface)
@@ -160,12 +159,13 @@ public class PlayerDynamics : MonoBehaviour
 
     private Vector3 GetForces(Vector3 velocity, SurfaceData surface)
     {
-        Vector3 forceGravity = mass * Physics.gravity;
+        Vector3 forceGravity = rigidbody.mass * Physics.gravity;
         Vector3 forceFriction = Vector3.zero;
 
         if (surface.IsOnSurface)
         {
             Vector3 forwardOnSurface = Vector3.ProjectOnPlane(transform.forward, surface.Normal).normalized;
+            Vector3 velocityDirectionOnSurface = Vector3.ProjectOnPlane(velocity, surface.Normal).normalized;
 
             // Calculate forces in surface plane.
             Vector3 forceTangent = Vector3.ProjectOnPlane(forceGravity, surface.Normal);
@@ -175,7 +175,8 @@ public class PlayerDynamics : MonoBehaviour
             // Calculate force normal to surface plane.
             Vector3 forceNormal = Vector3.Project(forceGravity, surface.Normal);
 
-            float frictionMagnitude = forceNormal.magnitude + forcePerpendicular.magnitude;
+            float skidFriction = (1.0f - Mathf.Clamp01(Vector3.Dot(velocityDirectionOnSurface, forwardOnSurface))) * maxSkidFrictionMagnitude;
+            float frictionMagnitude = forceNormal.magnitude + forcePerpendicular.magnitude + skidFriction;
 
             if (velocity.magnitude > 0.001f)
             {
@@ -191,6 +192,8 @@ public class PlayerDynamics : MonoBehaviour
             forceGravity = forceTangent;
         }
 
+        GravityForceMagnitude = forceGravity.magnitude;
+        FrictionForceMagnitude = forceFriction.magnitude;
         return forceGravity + forceFriction;
     }
 
