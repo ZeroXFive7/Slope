@@ -13,12 +13,10 @@ public class ChaseCamera : MonoBehaviour
 
     private Vector3 velocity = Vector3.zero;
 
-    [Header("Component References")]
-    [SerializeField]
-    private new Camera camera = null;
+    public Camera Camera { get; private set; }
 
     [HideInInspector]
-    public Transform Player = null;
+    public PlayerController Player = null;
     [HideInInspector]
     public Vector3 TargetForward = Vector3.forward;
 
@@ -26,12 +24,17 @@ public class ChaseCamera : MonoBehaviour
     {
         get
         {
-            return camera.rect;
+            return Camera.rect;
         }
         set
         {
-            camera.rect = value;
+            Camera.rect = value;
         }
+    }
+
+    private void Awake()
+    {
+        Camera = GetComponent<Camera>();
     }
 
     private void LateUpdate()
@@ -53,6 +56,6 @@ public class ChaseCamera : MonoBehaviour
         Vector3 steeringForward = Vector3.ProjectOnPlane(TargetForward, Vector3.up).normalized;
         Vector3 steeringRight = Vector3.Cross(Vector3.up, steeringForward).normalized;
 
-        return Player.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
+        return Player.transform.position + steeringForward * offset.z + steeringRight * offset.x + Vector3.up * offset.y;
     }
 }

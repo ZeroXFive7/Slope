@@ -11,11 +11,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     private float turnSpeedDegrees = 30.0f;
 
-    private PlayerDynamics dynamics = null;
-
     private Rewired.Player input = null;
-
     private Vector3 targetForward = Vector3.forward;
+
+    public PlayerDynamics Dynamics { get; private set; }
 
     public int PlayerInputId
     {
@@ -35,7 +34,7 @@ public class PlayerController : MonoBehaviour
 
     private void Awake()
     {
-        dynamics = GetComponent<PlayerDynamics>();
+        Dynamics = GetComponent<PlayerDynamics>();
         targetForward = transform.forward;
     }
 
@@ -54,12 +53,12 @@ public class PlayerController : MonoBehaviour
         turnDebugTarget.transform.position = transform.position + targetForward * 5.0f;
 
         Camera.TargetForward = targetForward;
-        dynamics.DesiredForward = targetForward;
+        Dynamics.DesiredForward = targetForward;
     }
 
     public void Reset(Transform snapToTransform = null)
     {
-        dynamics.Reset(snapToTransform);
+        Dynamics.Reset(snapToTransform);
 
         if (Camera != null)
         {

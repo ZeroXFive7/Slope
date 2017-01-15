@@ -97,7 +97,8 @@ MonoBehaviour:
   smoothTime: 0.5
   rotate: 1
   camera: {fileID: 2001058}
-  Board: {fileID: 0}
+  Player: {fileID: 0}
+  TargetForward: {x: 0, y: 0, z: 1}
 --- !u!124 &12418516
 Behaviour:
   m_ObjectHideFlags: 1

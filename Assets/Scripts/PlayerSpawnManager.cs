@@ -15,6 +15,8 @@ public class PlayerSpawnManager : MonoBehaviour
     private PlayerController playerPrefab = null;
     [SerializeField]
     private ChaseCamera playerCameraPrefab = null;
+    [SerializeField]
+    private PlayerHUD playerHUDPrefab = null;
 
     [SerializeField]
     private Transform[] spawnPoints = null;
@@ -72,18 +74,25 @@ public class PlayerSpawnManager : MonoBehaviour
     {
         int playerLayerId = LayerMask.NameToLayer(layerName);
 
-        PlayerController newPlayer = Instantiate(playerPrefab);
+        PlayerController player = Instantiate(playerPrefab);
         ChaseCamera playerCamera = Instantiate(playerCameraPrefab);
+        PlayerHUD playerHud = Instantiate(playerHUDPrefab);
 
-        newPlayer.PlayerInputId = playerInputId;
-        newPlayer.Camera = playerCamera;
-        newPlayer.GetComponent<BoardTrailRenderers>().Colors = GetNextBoardColors();
+        // Initialize player.
+        player.PlayerInputId = playerInputId;
+        player.Camera = playerCamera;
+        player.GetComponent<BoardTrailRenderers>().Colors = GetNextBoardColors();
 
-        playerCamera.Player = newPlayer.transform;
+        // Initialize camera.
+        playerCamera.Player = player;
 
-        Players.Add(newPlayer);
+        // Initialize HUD UI.
+        playerHud.Camera = playerCamera;
+        playerHud.Player = player;
 
-        newPlayer.Reset(GetNextSpawnPoint());
+        Players.Add(player);
+
+        player.Reset(GetNextSpawnPoint());
     }
 
     private void DestroyPlayerCharacter(int playerInputId)

@@ -18,23 +18,39 @@ public class PlayerDynamics : MonoBehaviour
     [SerializeField]
     private float surfaceClampingThreshold = 0.075f;
 
+    [Header("Steering")]
     [SerializeField]
-    private float maxTurnSpeed = 90.0f;
+    private float maxSpeed = 20.0f;
+    [SerializeField]
+    private float minSpeedTurnRadius = 3.0f;
+    [SerializeField]
+    private float maxSpeedTurnRadius = 15.0f;
+    //[SerializeField]
+    //private float maxTurnSpeed = 90.0f;
     [SerializeField]
     private float maxLookSpeed = 360.0f;
-
-    [SerializeField]
-    private Transform debugLine = null;
 
     #endregion
 
     #region Fields
 
     // Component references.
-    private new CharacterController collider = null;
+    private new Rigidbody rigidbody = null;
+    private CapsuleCollider collider = null;
 
     // Local state.
     private Vector3 velocity = Vector3.zero;
+    private Vector3 previousPosition = Vector3.zero;
+    private SurfaceData surface;
+
+    #endregion
+
+    #region Properties
+
+    public float Speed
+    {
+        get { return velocity.magnitude; }
+    }
 
     [System.NonSerialized]
     public Vector3 DesiredForward = Vector3.forward;
@@ -60,83 +76,104 @@ public class PlayerDynamics : MonoBehaviour
     {
         if (snapToTransform)
         {
-            transform.position = snapToTransform.position;
-            transform.rotation = snapToTransform.rotation;
+            rigidbody.position = snapToTransform.position;
+            rigidbody.rotation = snapToTransform.rotation;
         }
 
+        previousPosition = rigidbody.position;
         velocity = Vector3.zero;
+        surface = SurfaceData.Default;
     }
 
     private void Awake()
     {
-        collider = GetComponent<CharacterController>();
-        debugLine.gameObject.SetActive(false);
+        rigidbody = GetComponent<Rigidbody>();
+        collider = GetComponent<CapsuleCollider>();
+
+        previousPosition = rigidbody.position;
+        velocity = Vector3.zero;
+        surface = SurfaceData.Default;
     }
 
     private void FixedUpdate()
     {
-        Vector3 surfaceNormal = Vector3.zero;
-        Vector3 surfacePoint = Vector3.zero;
-        bool isGrounded = TryGetSurface(defaultSurfaceDistance, out surfaceNormal, out surfacePoint);
-
-        // Project velocity into surface plane to avoid popping.
-        if (isGrounded)
-        {
-            velocity = Vector3.ProjectOnPlane(velocity, surfaceNormal);
-        }
+        // Query world state.
+        velocity = UpdateVelocity(Time.fixedDeltaTime, ref previousPosition);
+        surface = GetSurface(surface);
 
         // Integrate velocity.
-        Vector3 acceleration = GetForces(velocity, isGrounded, surfaceNormal) / mass;
+        Vector3 acceleration = GetForces(velocity, surface) / mass;
         velocity += acceleration * Time.fixedDeltaTime;
 
-        Quaternion velocityRotation = FaceTarget(velocity, DesiredForward, surfaceNormal, maxTurnSpeed);
-        velocity = velocityRotation * velocity;
-
-        // Integrate position.
-        bool wasGrounded = isGrounded;
-        collider.Move(velocity * Time.fixedDeltaTime);
-
-        // Try to snap to surface.
-        if (wasGrounded)
+        if (surface.IsOnSurface)
         {
-            isGrounded = TryGetSurface(surfaceClampingThreshold, out surfaceNormal, out surfacePoint);
-            if (isGrounded)
-            {
-                collider.Move(surfacePoint - transform.position);
-            }
-            else
-            {
-                Debug.Log("NOT GROUNDED");
-            }
+            // Clamp to surface.
+            velocity += ClampToSurface(surface);
+
+            // Rotate velocity.
+            float speed = velocity.magnitude;
+            float turnRadius = Mathf.Lerp(minSpeedTurnRadius, maxSpeedTurnRadius, Mathf.InverseLerp(0.0f, maxSpeed, speed));
+            float maxTurnSpeed = speed / turnRadius * Mathf.Rad2Deg;
+            Quaternion velocityRotation = FaceTarget(velocity, DesiredForward, surface.Normal, maxTurnSpeed);
+            velocity = velocityRotation * velocity;
+
+            // Rotate body.
+            Vector3 currentForward = Vector3.ProjectOnPlane(rigidbody.transform.forward, surface.Normal);
+            Quaternion bodyRotation = FaceTarget(currentForward, DesiredForward, surface.Normal, maxLookSpeed);
+            currentForward = bodyRotation * currentForward;
+            rigidbody.rotation = Quaternion.LookRotation(currentForward, surface.Normal);
         }
 
-        // Rotate to face velocity.
-        Vector3 currentForward = Vector3.ProjectOnPlane(transform.forward, surfaceNormal);
-
-        Quaternion bodyRotation = FaceTarget(currentForward, DesiredForward, surfaceNormal, maxLookSpeed);
-        currentForward = bodyRotation * currentForward;
-
-        transform.rotation = Quaternion.LookRotation(currentForward, surfaceNormal);
+        rigidbody.velocity = velocity;
     }
 
     #region Dynamics
 
-    private Vector3 GetForces(Vector3 velocity, bool isGrounded, Vector3 surfaceNormal)
+    private Vector3 UpdateVelocity(float deltaTime, ref Vector3 previousPosition)
+    {
+        Vector3 velocity = (rigidbody.position - previousPosition) / deltaTime;
+        previousPosition = rigidbody.position;
+        return velocity;
+    }
+
+    private Vector3 ClampToSurface(SurfaceData surface)
+    {
+        return Vector3.Project(surface.ClosestPoint - rigidbody.position, Vector3.up);
+    }
+
+    private SurfaceData GetSurface(SurfaceData previousSurfaceData)
+    {
+        SurfaceData surface = SurfaceData.Default;
+
+        // If a raycast starts inside a collider then the resulting RaycastHit will be invalid.
+        // To avoid this condition start the raycast inside the collider by translating surface distance along local up.
+        RaycastHit hit;
+        if (Physics.Raycast(rigidbody.position + transform.up * defaultSurfaceDistance, -transform.up, out hit, 2.0f * defaultSurfaceDistance))
+        {
+            surface.IsOnSurface = true;
+            surface.Normal = hit.normal;
+            surface.ClosestPoint = hit.point;
+        }
+
+        return surface;
+    }
+
+    private Vector3 GetForces(Vector3 velocity, SurfaceData surface)
     {
         Vector3 forceGravity = mass * Physics.gravity;
         Vector3 forceFriction = Vector3.zero;
 
-        if (isGrounded)
+        if (surface.IsOnSurface)
         {
-            Vector3 forwardOnSurface = Vector3.ProjectOnPlane(transform.forward, surfaceNormal).normalized;
+            Vector3 forwardOnSurface = Vector3.ProjectOnPlane(transform.forward, surface.Normal).normalized;
 
             // Calculate forces in surface plane.
-            Vector3 forceTangent = Vector3.ProjectOnPlane(forceGravity, surfaceNormal);
+            Vector3 forceTangent = Vector3.ProjectOnPlane(forceGravity, surface.Normal);
             Vector3 forceParallel = Vector3.Project(forceTangent, forwardOnSurface);
             Vector3 forcePerpendicular = forceTangent - forceParallel;
 
             // Calculate force normal to surface plane.
-            Vector3 forceNormal = Vector3.Project(forceGravity, surfaceNormal);
+            Vector3 forceNormal = Vector3.Project(forceGravity, surface.Normal);
 
             float frictionMagnitude = forceNormal.magnitude + forcePerpendicular.magnitude;
 
@@ -165,7 +202,7 @@ public class PlayerDynamics : MonoBehaviour
         float direction = Mathf.Sign(Vector3.Dot(Vector3.Cross(currentPlanar, targetPlanar), normal));
 
         Quaternion rotation = Quaternion.identity;
-        if (angleToTarget < (maxTurnSpeed * Time.fixedDeltaTime))
+        if (angleToTarget < (maxSpeed * Time.fixedDeltaTime))
         {
             rotation = Quaternion.AngleAxis(angleToTarget * direction, normal);
         }
@@ -178,35 +215,15 @@ public class PlayerDynamics : MonoBehaviour
 
     #endregion
 
-    #region Helpers
+    #region Structs
 
-    private bool CollidedWith(CollisionFlags flag)
+    private struct SurfaceData
     {
-        return (collider.collisionFlags & flag) != 0;
-    }
+        public bool IsOnSurface;
+        public Vector3 Normal;
+        public Vector3 ClosestPoint;
 
-    private bool TryGetSurface(float maxDistance, out Vector3 surfaceNormal, out Vector3 surfacePoint)
-    {
-        float capHeight = collider.radius;
-        float bodyHeight = collider.height - 2.0f * capHeight;
-        float rayOriginHeight = capHeight + bodyHeight;
-        Vector3 origin = transform.position + transform.up * rayOriginHeight;
-        return TryGetSurfaceNormal(origin, -transform.up, rayOriginHeight + maxDistance, out surfaceNormal, out surfacePoint);
-    }
-
-    private bool TryGetSurfaceNormal(Vector3 raycastOrigin, Vector3 raycastDirection, float maxRaycastDistance, out Vector3 surfaceNormal, out Vector3 surfacePoint)
-    {
-        RaycastHit hit;
-        if (Physics.SphereCast(raycastOrigin, collider.radius, raycastDirection, out hit, maxRaycastDistance))
-        {
-            surfaceNormal = hit.normal;
-            surfacePoint = hit.point;
-            return true;
-        }
-
-        surfacePoint = Vector3.zero;
-        surfaceNormal = Vector3.zero;
-        return false;
+        public static SurfaceData Default = new SurfaceData() { IsOnSurface = false, Normal = Vector3.up, ClosestPoint = Vector3.zero };
     }
 
     #endregion
